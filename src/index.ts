@@ -143,6 +143,22 @@ async function sleep(n: number) {
     });
 }
 
+function makeSampleBuffer(ctx: BaseAudioContext, data: number[]): AudioBuffer {
+    const buf = ctx.createBuffer(1, data.length * 128, 44100)
+    for(var i = 0; i < data.length; i++) {
+        const start = i * 128
+        const end = (i + 1) * 128
+        buf.getChannelData(0).fill(data[i], start, end)
+    }
+    return buf
+}
+
+function makeBufferSource(ctx: BaseAudioContext, buf: AudioBuffer): AudioBufferSourceNode {
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    return src
+}
+
 async function run() {
     const ctx = new AudioContext()
 
@@ -174,14 +190,7 @@ async function run() {
         packets.push(data) 
     }
 
-    const in0 = ctx.createBuffer(1, 512, 44100)
-    in0.getChannelData(0).fill(1, 0, 128)
-    in0.getChannelData(0).fill(1, 256, 384)
-    const in0Node = ctx.createBufferSource()
-    in0Node.buffer = in0
-    
-    console.log(in0.getChannelData(0))
-    console.log('-------------')
+    const in0Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [1, 0, 1, 0]))
 
     //in0Node.connect(worklet)
     const not = createNotGate(ctx, in0Node)
@@ -203,15 +212,8 @@ async function run() {
     in0Node.disconnect()
 
 
-    const in1 = ctx.createBuffer(1, 512, 44100)
-    in1.getChannelData(0).fill(1, 128, 256)
-    in1.getChannelData(0).fill(1, 384, 512)
-    const in1Node = ctx.createBufferSource()
-    in1Node.buffer = in1
+    const in1Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 1, 0, 1]))
 
-    console.log(in1.getChannelData(0))
-    console.log('-------------')
-    
     in1Node.connect(not)
 
     worklet.port.postMessage(4)
