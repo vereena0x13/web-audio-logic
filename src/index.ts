@@ -146,6 +146,17 @@ async function sleep(n: number) {
 async function run() {
     const ctx = new AudioContext()
 
+
+    {
+        const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        src.connect(ctx.destination)
+        src.start()
+        if(ctx.resume) ctx.resume()
+    }
+
+
     const workletURL = new WorkerUrl(new URL('./worklet.ts', import.meta.url), { name: 'recorder-processor' });
     await ctx.audioWorklet.addModule(workletURL)
 
@@ -180,22 +191,42 @@ async function run() {
 
     in0Node.start()
 
-    while(packets.length < 2) {
+    while(packets.length < 4) {
         await sleep(0)
     }
-    
+    in0Node.stop()
+    packets.length = 0
+
     console.log('done!')
 
-    /*
-    {
-        const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
-        const src = ctx.createBufferSource()
-        src.buffer = buf
-        src.connect(ctx.destination)
-        src.start()
 
-        if(ctx.resume) ctx.resume()
+    in0Node.disconnect()
+
+
+    const in1 = ctx.createBuffer(1, 512, 44100)
+    in1.getChannelData(0).fill(1, 128, 256)
+    in1.getChannelData(0).fill(1, 384, 512)
+    const in1Node = ctx.createBufferSource()
+    in1Node.buffer = in1
+
+    console.log(in1.getChannelData(0))
+    console.log('-------------')
+    
+    in1Node.connect(not)
+
+    worklet.port.postMessage(4)
+
+    in1Node.start()
+
+    while(packets.length < 4) {
+        await sleep(0)
     }
+    in1Node.stop()
+    
+    console.log('done2!')
+
+    /*
+    
     
 
     const capture = ctx.createScriptProcessor(1024, 1, 1);

@@ -52,7 +52,7 @@ export class RecorderProcessor extends AudioWorkletProcessor {
 
         if(this.framesLeft > 0) {
             this.framesLeft--
-            return this.framesLeft > 0
+            return true
         }
 
         return false
