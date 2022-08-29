@@ -159,18 +159,21 @@ function makeBufferSource(ctx: BaseAudioContext, buf: AudioBuffer): AudioBufferS
     return src
 }
 
-async function run() {
+function makeAudioContext(): AudioContext {
     const ctx = new AudioContext()
 
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    src.start()
+    if(ctx.resume) ctx.resume()
 
-    {
-        const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
-        const src = ctx.createBufferSource()
-        src.buffer = buf
-        src.connect(ctx.destination)
-        src.start()
-        if(ctx.resume) ctx.resume()
-    }
+    return ctx
+}
+
+async function run() {
+    const ctx = makeAudioContext()
 
 
     const workletURL = new WorkerUrl(new URL('./worklet.ts', import.meta.url), { name: 'recorder-processor' });
@@ -182,17 +185,12 @@ async function run() {
         channelCount: 1,
     })
     
-    const packets = []
+    var packets: any[] = []
+    worklet.port.onmessage = e => packets.push(e.data[0])
 
-    worklet.port.onmessage = async e => {
-        const data = e.data[0]
-        console.log(data)       
-        packets.push(data) 
-    }
 
     const in0Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [1, 0, 1, 0]))
 
-    //in0Node.connect(worklet)
     const not = createNotGate(ctx, in0Node)
     not.connect(worklet)
 
@@ -204,11 +202,12 @@ async function run() {
         await sleep(0)
     }
     in0Node.stop()
-    packets.length = 0
 
+    console.log(packets)
     console.log('done!')
 
 
+    packets = []
     in0Node.disconnect()
 
 
@@ -224,7 +223,8 @@ async function run() {
         await sleep(0)
     }
     in1Node.stop()
-    
+
+    console.log(packets)
     console.log('done2!')
 
     /*
