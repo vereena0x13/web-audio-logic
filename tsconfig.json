@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "rootDirs": ["./src", "../shared/types"],
+    "sourceMap": true,
+    "module": "es2022",
+    "moduleResolution": "node",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": ["es5", "es6", "dom"],
+  }
+}
