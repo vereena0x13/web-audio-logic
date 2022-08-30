@@ -18,14 +18,13 @@ export class RecorderProcessor extends AudioWorkletProcessor {
 
         // TODO: copy all channels; send all channels
 
-        const input = inputs[0]
-        const output = outputs[0]
-        
-        for(var c = 0; c < input.length; c++) {
-            output[c].set(input[c])
+        for(var i = 0; i < inputs.length; i++) {
+            const input = inputs[i]
+            const output = outputs[i]
+            for(var c = 0; c < input.length; c++) output[c].set(input[c])
         }
 
-        this.port.postMessage(input)
+        this.port.postMessage(inputs)
 
         return true
     }

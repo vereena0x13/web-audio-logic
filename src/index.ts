@@ -1,5 +1,5 @@
 import { WorkerUrl } from 'worker-url'
-import { sleep, frameToBit } from './util'
+import { sleep, frameToBit, framesToBits } from './util'
 
 function createBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
@@ -112,6 +112,16 @@ function makeAudioContext(): AudioContext {
     return ctx
 }
 
+function arraysEqual<T>(a: T[], b: T[]) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
 async function run() {
     const ctx = makeAudioContext()
 
@@ -121,63 +131,77 @@ async function run() {
     const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
-        channelCount: 1,
+        channelCount: 3,
     })
 
-    var packets: number[] = []
-    recorder.port.onmessage = e => packets.push(frameToBit(e.data[0]))
+    var packets: number[][] = []
+    recorder.port.onmessage = e => packets.push(framesToBits(e.data[0]))
 
 
-    var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0],
-        [0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0]
-    ]))
+    const clks = Array.from({ length: 100 }, () => [0, 1]).flat()
+    var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [ clks ]))
 
-    const split = ctx.createChannelSplitter(2)
-    inb.connect(split)
+    const merger = ctx.createChannelMerger(4)
 
     const clk = ctx.createGain()
     const dat = ctx.createGain()
 
-    split.connect(clk, 0)
-    split.connect(dat, 1)
+    inb.connect(clk)
 
     const nclk = createNotGate(ctx, clk)
     const latch1 = createDLatch(ctx, nclk, dat)
     const nclk2 = createNotGate(ctx, nclk)
     const latch2 = createDLatch(ctx, nclk2, latch1)
-    latch2.connect(recorder)
+    const ndat = createNotGate(ctx, latch2)
+    ndat.connect(dat)
+    latch2.connect(merger, 0, 0)
 
-    recorder.port.postMessage(16)
+    const dat2 = ctx.createGain()
+
+    const latch3 = createDLatch(ctx, latch2, dat2)
+    const nlatch22 = createNotGate(ctx, latch2)
+    const latch4 = createDLatch(ctx, nlatch22, latch3)
+    const ndat2 = createNotGate(ctx, latch4)
+    ndat2.connect(dat2)
+    latch4.connect(merger, 0, 1)
+
+    const dat3 = ctx.createGain()
+
+    const latch5 = createDLatch(ctx, latch4, dat3)
+    const nlatch42 = createNotGate(ctx, latch4)
+    const latch6 = createDLatch(ctx, nlatch42, latch5)
+    const ndat3 = createNotGate(ctx, latch6)
+    ndat3.connect(dat3)
+    latch6.connect(merger, 0, 2)
+
+    const dat4 = ctx.createGain()
+
+    const latch7 = createDLatch(ctx, latch6, dat4)
+    const nlatch62 = createNotGate(ctx, latch6)
+    const latch8 = createDLatch(ctx, nlatch62, latch7)
+    const ndat4 = createNotGate(ctx, latch8)
+    ndat4.connect(dat4)
+    latch8.connect(merger, 0, 3)
+
+    merger.connect(recorder)
+
+    recorder.port.postMessage(clks.length)
 
     inb.start()
-    while(packets.length < 16) {
+    while(packets.length < clks.length) {
         await sleep(0)
     }
     inb.stop()
 
-    console.log(packets)
-
-
-    packets = []
-    inb.disconnect()
-
-
-    inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 0, 1, 1, 0, 0, 0, 1, 0, 0],
-        [0, 0, 1, 1, 0, 0, 1, 1, 0, 0]
-    ]))
-    inb.connect(split)
-
-    recorder.port.postMessage(10)
-
-    inb.start()
-    while(packets.length < 10) {
-        await sleep(0)
+    var last = '0000'
+    for(var i = 0; i < packets.length; i++) {
+        const packet = packets[i]
+        const pstr = `${packet[3]}${packet[2]}${packet[1]}${packet[0]}` // TODO function for this
+        if(pstr === last) continue
+        last = pstr
+        console.log(pstr)
     }
-    inb.stop()
-
-    console.log(packets)
+    //console.log(packets)
 }
 
 
@@ -186,6 +210,7 @@ addEventListener('DOMContentLoaded', () => {
     const btn = document.createElement('button')
     //btn.style.display = 'none'
     btn.innerHTML = 'blah'
+    btn.style.fontSize = '48px'
     btn.onclick = run
     document.body.appendChild(btn)
     //btn.click()
