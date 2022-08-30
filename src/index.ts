@@ -75,12 +75,18 @@ async function sleep(n: number) {
     });
 }
 
-function makeSampleBuffer(ctx: BaseAudioContext, data: number[]): AudioBuffer {
-    const buf = ctx.createBuffer(1, data.length * 128, 44100)
-    for(var i = 0; i < data.length; i++) {
-        const start = i * 128
-        const end = (i + 1) * 128
-        buf.getChannelData(0).fill(data[i], start, end)
+function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): AudioBuffer {
+    const buf = ctx.createBuffer(data.length, data[0].length * 128, 44100)
+    var last = data[0].length
+    for(var channel = 0; channel < data.length; channel++) {
+        const cdata = data[channel]
+        if(cdata.length != last) throw new Error("invalid data length")
+        const chan = buf.getChannelData(channel)
+        for(var i = 0; i < cdata.length; i++) {
+            const start = i * 128
+            const end = (i + 1) * 128
+            chan.fill(cdata[i], start, end)
+        }
     }
     return buf
 }
@@ -122,96 +128,57 @@ async function run() {
     var packets: Float32Array[] = []
     recorder.port.onmessage = e => packets.push(e.data[0])
 
+    var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+        [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]
+    ]))
+
+    const split = ctx.createChannelSplitter(2)
+    inb.connect(split)
 
     const s = ctx.createGain()
     const r = ctx.createGain()
 
-
-    var sb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]))
-    var rb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]))
-    sb.connect(s)
-    rb.connect(r)
+    split.connect(s, 0)
+    split.connect(r, 1)
 
     const latch = createSRNorLatch(ctx, s, r)
     latch.connect(recorder)
 
     recorder.port.postMessage(13)
-    
-    sb.start()
-    rb.start()
+
+    inb.start()
 
     while(packets.length < 13) {
         await sleep(0)
     }
-    
-    sb.stop()
-    rb.stop()
+
+    inb.stop()
 
     console.log(packets)
 
 
     packets = []
-    sb.disconnect()
-    rb.disconnect()
+    inb.disconnect()
 
-    
-    sb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 1, 0, 0, 0]))
-    rb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 0, 0, 1, 0]))
-    sb.connect(s)
-    rb.connect(r)
 
+    inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0]
+    ]))
+    inb.connect(split)
 
     recorder.port.postMessage(6)
 
-    sb.start()
-    rb.start()
+    inb.start()
 
     while(packets.length < 6) {
         await sleep(0)
     }
 
-    sb.stop()
-    rb.stop()
+    inb.stop()
 
     console.log(packets)
-
-
-    /*
-    const in0Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [1, 0, 1, 0]))
-
-    const not = createNotGate(ctx, in0Node)
-    not.connect(worklet)
-
-    worklet.port.postMessage(4)
-
-    in0Node.start()
-
-    while(packets.length < 4) {
-        await sleep(0)
-    }
-    in0Node.stop()
-
-    console.log(packets)
-
-    packets = []
-    in0Node.disconnect()
-
-
-    const in1Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 1, 0, 1]))
-
-    in1Node.connect(not)
-
-    worklet.port.postMessage(4)
-
-    in1Node.start()
-
-    while(packets.length < 4) {
-        await sleep(0)
-    }
-    in1Node.stop()
-
-    console.log(packets)
-    */
 }
 
 
