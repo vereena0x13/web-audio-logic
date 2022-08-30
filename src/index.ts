@@ -1,5 +1,5 @@
 import { WorkerUrl } from 'worker-url'
-import { sleep, frameToBit, framesToBits } from './util'
+import { sleep, frameToBit, framesToBits, bitsToNumber, numberToBits } from './util'
 
 function createBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
@@ -198,6 +198,7 @@ async function run() {
         const packet = packets[i]
         const pstr = `${packet[3]}${packet[2]}${packet[1]}${packet[0]}` // TODO function for this
         if(pstr === last) continue
+        console.log(bitsToNumber(packet, 'LSBFIRST'))
         last = pstr
         console.log(pstr)
     }

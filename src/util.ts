@@ -34,3 +34,26 @@ export function bitToFrame(bit: number, frameSize: number = 128): Float32Array {
     frame.fill(normalizeBit(bit), 0, frameSize - 1)
     return frame
 }
+
+type BitOrder = 'MSBFIRST' | 'LSBFIRST'
+
+export function bitsToNumber(bits: number[], bitorder: BitOrder): number {
+    var n = 0
+    for(var i = 0; i < bits.length; i++) {
+        const j = bitorder === 'MSBFIRST' ? (bits.length - 1 - i) : i
+        if(bits[j] == 1) {
+            n += 2 ** i
+        }
+    }
+    return n
+}
+
+export function numberToBits(n: number, bits: number, bitorder: BitOrder = 'LSBFIRST'): number[] {
+    const result = new Array<number>(bits)
+    for(var i = 0; i < bits; i++) {
+        const j = bitorder === 'MSBFIRST' ? (bits - 1 - i) : i
+        const bit = (n & (1 << j)) != 0
+        result.push(bit ? 1 : 0)
+    }
+    return result
+}
