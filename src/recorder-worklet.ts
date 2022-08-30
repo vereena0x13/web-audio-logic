@@ -16,8 +16,6 @@ export class RecorderProcessor extends AudioWorkletProcessor {
         }
         this.framesLeft--
 
-        // TODO: copy all channels; send all channels
-
         for(var i = 0; i < inputs.length; i++) {
             const input = inputs[i]
             const output = outputs[i]
