@@ -11,24 +11,21 @@ export class RecorderProcessor extends AudioWorkletProcessor {
         outputs: Float32Array[][],
         parameters: { coefficient: Float32Array }
     ): boolean {
-        if (inputs.length === 0 || outputs.length === 0) {
+        if (inputs.length === 0 || outputs.length === 0 || this.framesLeft <= 0) {
             return true
         }
+        this.framesLeft--
 
-        if(this.framesLeft <= 0) return true
+        // TODO: copy all channels; send all channels
 
         const input = inputs[0]
         const output = outputs[0]
         
         for(var c = 0; c < input.length; c++) {
-            const cin = input[c]
-            const cout = output[c]
-            for(var i = 0; i < cin.length; i++) cout[i] = cin[i]
+            output[c].set(input[c])
         }
 
         this.port.postMessage(input)
-
-        if(this.framesLeft > 0) this.framesLeft--
 
         return true
     }
