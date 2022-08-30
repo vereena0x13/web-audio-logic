@@ -118,9 +118,6 @@ async function run() {
 
     await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./recorder-worklet.ts', import.meta.url), { name: 'recorder-processor' }))
 
-    const run = ctx.createConstantSource()
-    run.start()
-
     const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
