@@ -1,72 +1,4 @@
-/*
-import { AudioLogicContext } from './audio-logic'
-
-// async function run() {
-//     const ctx = new AudioLogicContext()
-
-        
-// }
-
-// run()
-
-
-async function run() {
-    const samples = 1024*2
-
-    const ctx = new OfflineAudioContext(1, samples, 44100)
-
-    const in0 = ctx.createBuffer(1, samples, 44100)
-    in0.getChannelData(0).fill(1, 128, 256)
-    in0.getChannelData(0).fill(1, 768, 768+128)
-    const in0Node = ctx.createBufferSource()
-    in0Node.buffer = in0
-
-    const in1 = ctx.createBuffer(1, samples, 44100)
-    in1.getChannelData(0).fill(1, 512, 512+128)
-    const in1Node = ctx.createBufferSource()
-    in1Node.buffer = in1
-
-    const out = createSRNorLatch(ctx, in0Node, in1Node)
-    out.connect(ctx.destination)
-
-    in0Node.start()
-    in1Node.start()
-
-    ctx.onstatechange = e => {
-        console.log(e)
-    }
-
-    ctx.oncomplete = e => {
-        console.log(e)
-    }
-
-
-
-    ctx.suspend(1024/44100).then(() => {
-        ctx.resume()
-    })
-
-    await ctx.startRendering()
-
-    // const buf = await ctx.startRendering()
-    // console.log(buf.getChannelData(0))
-
-    // in0.getChannelData(0).fill(0, 0, samples)
-    // in0.getChannelData(0).fill(1, 128, 256)
-
-    // in1.getChannelData(0).fill(0, 0, samples)
-    // in1.getChannelData(0).fill(1, 512, 512+128)
-
-    // const buf2 = await ctx.startRendering()
-    // console.log(buf2.getChannelData(0))
-}
-
-run()
-*/
-
-
 import { WorkerUrl } from 'worker-url'
-
 
 function createBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
@@ -176,19 +108,75 @@ async function run() {
     const ctx = makeAudioContext()
 
 
-    const workletURL = new WorkerUrl(new URL('./worklet.ts', import.meta.url), { name: 'recorder-processor' });
-    await ctx.audioWorklet.addModule(workletURL)
+    await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./recorder-worklet.ts', import.meta.url), { name: 'recorder-processor' }))
 
-    const worklet = new AudioWorkletNode(ctx, 'recorder-processor', {
+    const run = ctx.createConstantSource()
+    run.start()
+
+    const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         channelCount: 1,
     })
+
+    var packets: Float32Array[] = []
+    recorder.port.onmessage = e => packets.push(e.data[0])
+
+
+    const s = ctx.createGain()
+    const r = ctx.createGain()
+
+
+    var sb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]))
+    var rb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]))
+    sb.connect(s)
+    rb.connect(r)
+
+    const latch = createSRNorLatch(ctx, s, r)
+    latch.connect(recorder)
+
+    recorder.port.postMessage(13)
     
-    var packets: any[] = []
-    worklet.port.onmessage = e => packets.push(e.data[0])
+    sb.start()
+    rb.start()
+
+    while(packets.length < 13) {
+        await sleep(0)
+    }
+    
+    sb.stop()
+    rb.stop()
+
+    console.log(packets)
 
 
+    packets = []
+    sb.disconnect()
+    rb.disconnect()
+
+    
+    sb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 1, 0, 0, 0]))
+    rb = makeBufferSource(ctx, makeSampleBuffer(ctx, [0, 0, 0, 0, 1, 0]))
+    sb.connect(s)
+    rb.connect(r)
+
+
+    recorder.port.postMessage(6)
+
+    sb.start()
+    rb.start()
+
+    while(packets.length < 6) {
+        await sleep(0)
+    }
+
+    sb.stop()
+    rb.stop()
+
+    console.log(packets)
+
+
+    /*
     const in0Node = makeBufferSource(ctx, makeSampleBuffer(ctx, [1, 0, 1, 0]))
 
     const not = createNotGate(ctx, in0Node)
@@ -204,8 +192,6 @@ async function run() {
     in0Node.stop()
 
     console.log(packets)
-    console.log('done!')
-
 
     packets = []
     in0Node.disconnect()
@@ -225,45 +211,7 @@ async function run() {
     in1Node.stop()
 
     console.log(packets)
-    console.log('done2!')
-
-    /*
-    
-    
-
-    const capture = ctx.createScriptProcessor(1024, 1, 1);
-    capture.onaudioprocess = e => {
-        console.log(e)
-    }
-    in0Node.connect(capture)
-
-    in0Node.start()
     */
-
-    /*
-    const dest = ctx.createMediaStreamDestination()
-    const recorder = new MediaRecorder(dest.stream)
-
-    recorder.ondataavailable = async e => {
-        console.log(e.data)
-        const buf = await ctx.decodeAudioData(await e.data.arrayBuffer())
-        console.log(buf.getChannelData(0))
-    }
-
-    const not = createNotGate(ctx, in0Node)
-    not.connect(dest)
-
-
-    recorder.start()
-    in0Node.start()
-    await sleep(50)
-
-    //while(ctx.currentTime < 1024*3/44100) {}
-    recorder.stop()
-
-    console.log(ctx.currentTime)
-    */
-
 }
 
 

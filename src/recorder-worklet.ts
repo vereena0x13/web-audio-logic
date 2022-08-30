@@ -1,25 +1,3 @@
-declare interface AudioWorkletProcessorImpl<T extends AudioWorkletProcessor> {
-    new(): T
-}
-
-declare abstract class AudioWorkletProcessor {
-    readonly port: MessagePort
-
-    process(
-        inputs: Float32Array[][],
-        outputs: Float32Array[][],
-        parameters: { [key: string]: Float32Array }
-    ): boolean
-}
-
-declare function registerProcessor<T extends AudioWorkletProcessor>(
-    name: string, processor: AudioWorkletProcessorImpl<T>
-): void
-
-declare interface AudioParamMap extends Map<string, AudioParam> {
-    // readonly size: number
-}
-
 export class RecorderProcessor extends AudioWorkletProcessor {
     private framesLeft: number = 0
 
@@ -36,7 +14,7 @@ export class RecorderProcessor extends AudioWorkletProcessor {
         if (inputs.length === 0 || outputs.length === 0) {
             return false
         }
-        
+
         if(this.framesLeft <= 0) return false
 
         const input = inputs[0]
