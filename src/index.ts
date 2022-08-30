@@ -1,4 +1,5 @@
 import { WorkerUrl } from 'worker-url'
+import { sleep, frameToBit } from './util'
 
 function createBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
@@ -54,6 +55,13 @@ function createSRNorLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): Au
     return nor1
 }
 
+function createDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
+    const ndat = createNotGate(ctx, dat)
+    const dac = createAndGate(ctx, clk, dat)
+    const ndac = createAndGate(ctx, clk, ndat)
+    return createSRNorLatch(ctx, dac, ndac)
+}
+
 function createDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
     const delay = ctx.createDelay()
     delay.delayTime.value = 1/44100
@@ -67,12 +75,6 @@ function createDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): Au
     and.connect(buf)
     
     return delay
-}
-
-async function sleep(n: number) {
-    await new Promise((resolve) => {
-        setTimeout(() => resolve(null), n)
-    });
 }
 
 function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): AudioBuffer {
@@ -125,34 +127,36 @@ async function run() {
         channelCount: 1,
     })
 
-    var packets: Float32Array[] = []
-    recorder.port.onmessage = e => packets.push(e.data[0])
+    var packets: number[] = []
+    recorder.port.onmessage = e => packets.push(frameToBit(e.data[0]))
+
 
     var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0]
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0],
+        [0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0]
     ]))
 
     const split = ctx.createChannelSplitter(2)
     inb.connect(split)
 
-    const s = ctx.createGain()
-    const r = ctx.createGain()
+    const clk = ctx.createGain()
+    const dat = ctx.createGain()
 
-    split.connect(s, 0)
-    split.connect(r, 1)
+    split.connect(clk, 0)
+    split.connect(dat, 1)
 
-    const latch = createSRNorLatch(ctx, s, r)
-    latch.connect(recorder)
+    const nclk = createNotGate(ctx, clk)
+    const latch1 = createDLatch(ctx, nclk, dat)
+    const nclk2 = createNotGate(ctx, nclk)
+    const latch2 = createDLatch(ctx, nclk2, latch1)
+    latch2.connect(recorder)
 
-    recorder.port.postMessage(14)
+    recorder.port.postMessage(16)
 
     inb.start()
-
-    while(packets.length < 14) {
+    while(packets.length < 16) {
         await sleep(0)
     }
-
     inb.stop()
 
     console.log(packets)
@@ -163,24 +167,20 @@ async function run() {
 
 
     inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 0, 0, 0, 1, 0],
-        [0, 0, 1, 0, 0, 0]
+        [0, 0, 1, 1, 0, 0, 0, 1, 0, 0],
+        [0, 0, 1, 1, 0, 0, 1, 1, 0, 0]
     ]))
     inb.connect(split)
 
-    recorder.port.postMessage(6)
+    recorder.port.postMessage(10)
 
     inb.start()
-
-    while(packets.length < 6) {
+    while(packets.length < 10) {
         await sleep(0)
     }
-
     inb.stop()
 
     console.log(packets)
-
-    console.log('done!')
 }
 
 
