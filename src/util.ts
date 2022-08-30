@@ -37,7 +37,7 @@ export function bitToFrame(bit: number, frameSize: number = 128): Float32Array {
 
 export type BitOrder = 'MSBFIRST' | 'LSBFIRST'
 
-export function bitsToNumber(bits: number[], bitorder: BitOrder): number {
+export function bitsToNumber(bits: number[], bitorder: BitOrder = 'LSBFIRST'): number {
     var n = 0
     for(var i = 0; i < bits.length; i++) {
         const j = bitorder === 'MSBFIRST' ? (bits.length - 1 - i) : i
