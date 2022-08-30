@@ -12,10 +12,10 @@ export class RecorderProcessor extends AudioWorkletProcessor {
         parameters: { coefficient: Float32Array }
     ): boolean {
         if (inputs.length === 0 || outputs.length === 0) {
-            return false
+            return true
         }
 
-        if(this.framesLeft <= 0) return false
+        if(this.framesLeft <= 0) return true
 
         const input = inputs[0]
         const output = outputs[0]
@@ -28,12 +28,9 @@ export class RecorderProcessor extends AudioWorkletProcessor {
 
         this.port.postMessage(input)
 
-        if(this.framesLeft > 0) {
-            this.framesLeft--
-            return true
-        }
+        if(this.framesLeft > 0) this.framesLeft--
 
-        return false
+        return true
     }
 }
 

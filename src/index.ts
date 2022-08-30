@@ -129,8 +129,8 @@ async function run() {
     recorder.port.onmessage = e => packets.push(e.data[0])
 
     var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0]
+        [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0]
     ]))
 
     const split = ctx.createChannelSplitter(2)
@@ -145,11 +145,11 @@ async function run() {
     const latch = createSRNorLatch(ctx, s, r)
     latch.connect(recorder)
 
-    recorder.port.postMessage(13)
+    recorder.port.postMessage(14)
 
     inb.start()
 
-    while(packets.length < 13) {
+    while(packets.length < 14) {
         await sleep(0)
     }
 
@@ -163,8 +163,8 @@ async function run() {
 
 
     inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0]
+        [0, 0, 0, 0, 1, 0],
+        [0, 0, 1, 0, 0, 0]
     ]))
     inb.connect(split)
 
@@ -179,6 +179,8 @@ async function run() {
     inb.stop()
 
     console.log(packets)
+
+    console.log('done!')
 }
 
 
