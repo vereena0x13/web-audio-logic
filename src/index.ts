@@ -1,14 +1,14 @@
 import { WorkerUrl } from 'worker-url'
 import { sleep, frameToBit, framesToBits, bitsToNumber, numberToBits } from './util'
 
-function createBufferGate(ctx: BaseAudioContext): AudioNode {
+function makeBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
         curve: new Float32Array([0, 2])
     })
     return shaper
 }
 
-function createNotGate(ctx: BaseAudioContext, input: AudioNode): AudioNode {
+function makeNotGate(ctx: BaseAudioContext, input: AudioNode): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
         curve: new Float32Array([2, 0])
     })
@@ -16,7 +16,7 @@ function createNotGate(ctx: BaseAudioContext, input: AudioNode): AudioNode {
     return shaper
 }
 
-function createOrGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
+function makeOrGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
     const or = ctx.createGain()
     or.gain.value = 2
     a.connect(or)
@@ -28,41 +28,41 @@ function createOrGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioN
     return shaper
 }
 
-function createNorGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const or = createOrGate(ctx, a, b)
-    return createNotGate(ctx, or)
+function makeNorGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
+    const or = makeOrGate(ctx, a, b)
+    return makeNotGate(ctx, or)
 }
 
-function createNandGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const anot = createNotGate(ctx, a)
-    const bnot = createNotGate(ctx, b)
-    return createOrGate(ctx, anot, bnot)
+function makeNandGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
+    const anot = makeNotGate(ctx, a)
+    const bnot = makeNotGate(ctx, b)
+    return makeOrGate(ctx, anot, bnot)
 }
 
-function createAndGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const anot = createNotGate(ctx, a)
-    const bnot = createNotGate(ctx, b)
-    return createNorGate(ctx, anot, bnot)
+function makeAndGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
+    const anot = makeNotGate(ctx, a)
+    const bnot = makeNotGate(ctx, b)
+    return makeNorGate(ctx, anot, bnot)
 }
 
-function createSRNorLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
+function makeSRNorLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
     const buf1 = ctx.createGain()
     const buf2 = ctx.createGain()
-    const nor1 = createNorGate(ctx, r, buf1)
+    const nor1 = makeNorGate(ctx, r, buf1)
     nor1.connect(buf2)
-    const nor2 = createNorGate(ctx, s, buf2)
+    const nor2 = makeNorGate(ctx, s, buf2)
     nor2.connect(buf1)
     return nor1
 }
 
-function createDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
-    const ndat = createNotGate(ctx, dat)
-    const dac = createAndGate(ctx, clk, dat)
-    const ndac = createAndGate(ctx, clk, ndat)
-    return createSRNorLatch(ctx, dac, ndac)
+function makeDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
+    const ndat = makeNotGate(ctx, dat)
+    const dac = makeAndGate(ctx, clk, dat)
+    const ndac = makeAndGate(ctx, clk, ndat)
+    return makeSRNorLatch(ctx, dac, ndac)
 }
 
-function createDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
+function makeDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
     const delay = ctx.createDelay()
     delay.delayTime.value = 1/44100
     const buf = ctx.createGain()
@@ -70,7 +70,7 @@ function createDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): Au
     //s.connect(delay)
     s.connect(buf)
     
-    const and = createAndGate(ctx, createNotGate(ctx, r), buf)
+    const and = makeAndGate(ctx, makeNotGate(ctx, r), buf)
     //and.connect(delay)
     and.connect(buf)
     
@@ -112,18 +112,18 @@ function makeAudioContext(): AudioContext {
     return ctx
 }
 
-function createMultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
-    const nsel = createNotGate(ctx, sel)
-    const o0 = createAndGate(ctx, y, nsel)
-    const o1 = createAndGate(ctx, y, sel)
+function makeMultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
+    const nsel = makeNotGate(ctx, sel)
+    const o0 = makeAndGate(ctx, y, nsel)
+    const o1 = makeAndGate(ctx, y, sel)
     return [o0, o1]
 }
 
-function createDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
-    const nsel = createNotGate(ctx, sel)
-    const o0 = createAndGate(ctx, a, nsel)
-    const o1 = createAndGate(ctx, b, sel)
-    return createOrGate(ctx, o0, o1)
+function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
+    const nsel = makeNotGate(ctx, sel)
+    const o0 = makeAndGate(ctx, a, nsel)
+    const o1 = makeAndGate(ctx, b, sel)
+    return makeOrGate(ctx, o0, o1)
 }
 
 async function run() {
@@ -158,7 +158,7 @@ async function run() {
     splitter.connect(b, 1)
     splitter.connect(sel, 2)
 
-    const d = createDemultiplexor(ctx, a, b, sel)
+    const d = makeDemultiplexor(ctx, a, b, sel)
 
     d.connect(recorder)
 
