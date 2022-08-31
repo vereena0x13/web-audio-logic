@@ -112,14 +112,14 @@ function makeAudioContext(): AudioContext {
     return ctx
 }
 
-function createDemultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
+function createMultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
     const nsel = createNotGate(ctx, sel)
     const o0 = createAndGate(ctx, y, nsel)
     const o1 = createAndGate(ctx, y, sel)
     return [o0, o1]
 }
 
-function createMultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
+function createDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
     const nsel = createNotGate(ctx, sel)
     const o0 = createAndGate(ctx, a, nsel)
     const o1 = createAndGate(ctx, b, sel)
@@ -158,7 +158,7 @@ async function run() {
     splitter.connect(b, 1)
     splitter.connect(sel, 2)
 
-    const d = createMultiplexor(ctx, a, b, sel)
+    const d = createDemultiplexor(ctx, a, b, sel)
 
     d.connect(recorder)
 

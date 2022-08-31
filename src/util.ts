@@ -41,7 +41,7 @@ export function bitsToNumber(bits: number[], bitorder: BitOrder = 'LSBFIRST'): n
     var n = 0
     for(var i = 0; i < bits.length; i++) {
         const j = bitorder === 'MSBFIRST' ? (bits.length - 1 - i) : i
-        if(bits[j] == 1) {
+        if(bits[j] === 1) {
             n += 2 ** i
         }
     }
