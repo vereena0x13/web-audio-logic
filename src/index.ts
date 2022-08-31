@@ -245,7 +245,7 @@ async function run() {
 addEventListener('DOMContentLoaded', () => {
     const btn = document.createElement('button')
     //btn.style.display = 'none'
-    btn.innerHTML = 'blah'
+    btn.innerHTML = 'blåh'
     btn.style.fontSize = '48px'
     btn.onclick = run
     document.body.appendChild(btn)
