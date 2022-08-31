@@ -112,15 +112,19 @@ function makeAudioContext(): AudioContext {
     return ctx
 }
 
-function arraysEqual<T>(a: T[], b: T[]) {
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    if (a.length !== b.length) return false;
-    for (var i = 0; i < a.length; ++i) {
-        if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
+function createDemultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
+    const nsel = createNotGate(ctx, sel)
+    const o0 = createAndGate(ctx, y, nsel)
+    const o1 = createAndGate(ctx, y, sel)
+    return [o0, o1]
+}
+
+function createMultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
+    const nsel = createNotGate(ctx, sel)
+    const o0 = createAndGate(ctx, a, nsel)
+    const o1 = createAndGate(ctx, b, sel)
+    return createOrGate(ctx, o0, o1)
+}
 
 async function run() {
     const ctx = makeAudioContext()
@@ -138,7 +142,38 @@ async function run() {
     recorder.port.onmessage = e => packets.push(framesToBits(e.data[0]))
 
 
-    const clks = Array.from({ length: 100 }, () => [0, 1]).flat()
+    const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+        [0, 1, 0, 1, 0, 1, 0, 1],
+        [0, 0, 1, 1, 0, 0, 1, 1],
+        [0, 0, 0, 0, 1, 1, 1, 1]
+    ]))
+
+    const splitter = ctx.createChannelSplitter(3)
+    inb.connect(splitter)
+
+    const a = ctx.createGain()
+    const b = ctx.createGain()
+    const sel = ctx.createGain()
+    splitter.connect(a, 0)
+    splitter.connect(b, 1)
+    splitter.connect(sel, 2)
+
+    const d = createMultiplexor(ctx, a, b, sel)
+
+    d.connect(recorder)
+
+    recorder.port.postMessage(8)
+    
+    inb.start()
+    while(packets.length < 8) {
+        await sleep(0)
+    }
+    inb.stop()
+
+    console.log(packets)
+
+    /*
+    const clks = Array.from({ length: 32 }, () => [0, 1]).flat()
     var inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [ clks ]))
 
     const merger = ctx.createChannelMerger(4)
@@ -198,11 +233,11 @@ async function run() {
         const packet = packets[i]
         const pstr = `${packet[3]}${packet[2]}${packet[1]}${packet[0]}` // TODO function for this
         if(pstr === last) continue
-        console.log(bitsToNumber(packet, 'LSBFIRST'))
         last = pstr
         console.log(pstr)
     }
     //console.log(packets)
+    */
 }
 
 
