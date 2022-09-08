@@ -1,10 +1,11 @@
 import { WorkerUrl } from 'worker-url'
-import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
-import { BLIF, parseBLIF, blifToDOT } from './blif'
+import { assert, Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
+import { BLIF, parseBLIF, blifToDOT, BLIFNames } from './blif'
 import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
+
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/dff1.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
     console.log(blifToDOT(blif))
@@ -45,8 +46,8 @@ async function run() {
     function setNode(name: string, node: AudioNode) {
         if(name in nodes) {
             const n = nodes[name]
-            if(!(n instanceof GainNode)) throw new Error()
-            if(!(name in toConnect)) throw new Error()
+            assert(n instanceof GainNode)
+            assert(name in toConnect)
             delete toConnect[name]
             node.connect(n)
         } else {
@@ -82,9 +83,53 @@ async function run() {
         nodes[input] = n
         isplit.connect(n, i)
     })
+
+    function makePLA(names: BLIFNames): AudioNode {
+        // TODO: handle special cases: zero cover; one cover that is just a 1 (i.e. a constant 0 or 1); also
+        //       handle the case when the PLA is just implementing a buffer gate
+        const is = names.inputs.map(input => getNode(input))
+        const rows = names.cover.map((covers, i) => {
+            const coverParts = covers.split(' ')
+            assert(coverParts.length === 2)
+            const cover = coverParts[0]
+            assert(coverParts[1] === '1')
+            assert(cover.length === is.length)
+            const rowInputs: AudioNode[] = []
+            for(var j = 0; j < cover.length; j++) {
+                const c = cover.charAt(j)
+                switch(c) {
+                    case '1': {
+                        rowInputs.push(getNode(names.inputs[i]))
+                        break
+                    }
+                    case '0': {
+                        rowInputs.push(makeNotGate(ctx, getNode(names.inputs[i])))
+                        break
+                    }
+                    case '-': {
+                        break
+                    }
+                    default: {
+                        throw new Error(`invalid cover character '${c}'`)
+                    }
+                }
+            }
+            var row = makeAndGate(ctx, rowInputs[0], rowInputs[1])
+            for(var j = 0; j < rowInputs.length; j++) {
+                row = makeAndGate(ctx, row, rowInputs[j])
+            }
+            return row
+        })
+        var out = makeOrGate(ctx, rows[0], rows[1])
+        for(var i = 2; i < rows.length; i++) {
+            out = makeOrGate(ctx, out, rows[i])
+        }
+        return out
+    }
     
     blif.names.forEach((name, i) => {
         // TODO
+        // setNode(name.output, makePLA(name))
     })
 
     blif.cells.forEach(cell => {
@@ -156,6 +201,23 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
+    inputs['dat'] = 1
+    inputs['clk'] = 1
+    await tick()
+    inputs['dat'] = 1
+    inputs['clk'] = 0
+    await tick()
+    console.log(outputs)
+
+    inputs['dat'] = 0
+    inputs['clk'] = 1
+    await tick()
+    inputs['dat'] = 0
+    inputs['clk'] = 0
+    await tick()
+    console.log(outputs)
+
+    /*
     inputs['clk'] = 0
     inputs['rst'] = 0
     await tick()
@@ -185,6 +247,7 @@ async function run() {
     inputs['rst'] = 1
     await tick()
     console.log(outputs)
+    */
 }
 
 

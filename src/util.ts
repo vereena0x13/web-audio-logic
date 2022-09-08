@@ -82,3 +82,7 @@ export function makeAudioContext(): AudioContext {
 
     return ctx
 }
+
+export function assert(condition: boolean, message?: string) {
+    if(!condition) throw new Error(message ? `assertion failed: ${message}` : 'assertion failed')
+}
