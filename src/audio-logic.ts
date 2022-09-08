@@ -1,9 +1,10 @@
 export function makeBufferGate(ctx: BaseAudioContext, input?: AudioNode): AudioNode {
-    const shaper = new WaveShaperNode(ctx, {
-        curve: new Float32Array([0, 2])
-    })
-    input?.connect(shaper)
-    return shaper
+    //const shaper = new WaveShaperNode(ctx, {
+    //    curve: new Float32Array([0, 2])
+    //})
+    const node = ctx.createGain()
+    input?.connect(node)
+    return node
 }
 
 export function makeNotGate(ctx: BaseAudioContext, input: AudioNode): AudioNode {

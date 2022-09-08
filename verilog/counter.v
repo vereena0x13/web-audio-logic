@@ -4,7 +4,7 @@ module counter(
 	output reg [1:0] count
 );
 
-	always @ (posedge clk) begin
+	always@(posedge clk) begin
 		if (reset)
 			count <= 2'd0;
 		else
