@@ -1,13 +1,14 @@
 module counter(
-	input clk,
-	input reset,
-	output [3:0] count
+	input wire clk,
+	input wire reset,
+	output reg [1:0] count
 );
+
 	always @ (posedge clk) begin
 		if (reset)
-			count <= 4'd0;
+			count <= 2'd0;
 		else
-			count <= count + 4'd1;
+			count <= count + 2'd1;
 	end
 
 endmodule

@@ -3,10 +3,55 @@ import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, nu
 import { BLIF, parseBLIF } from './blif'
 import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
+function blifToDOT(blif: BLIF): string {
+    const lines: string[] = []
+
+    lines.push('digraph blif {')
+    blif.inputs.forEach(input => lines.push(`"${input}" [shape="triangle"];`))
+    blif.outputs.forEach(output => lines.push(`"${output}" [shape="hexagon"];`))
+    blif.cells.forEach(cell => lines.push(`"${cell.uniqueName}" [label="${cell.uniqueName}"];`))
+    const outs: Dictionary<string[]> = {}
+    const ins: Dictionary<string> = {}
+    blif.cells.forEach(cell => {
+        for(const [k, v] of Object.entries(cell.connections)) {
+            if(k === 'A' || k === 'B' || k === 'C' || k === 'D') {
+                if(blif.inputs.includes(v)) {
+                    lines.push(`"${v}" -> "${cell.uniqueName}";`)
+                } else {
+                    if(v in outs) {
+                        outs[v].push(cell.uniqueName)
+                    } else {
+                        outs[v] = [cell.uniqueName]
+                    }
+                }
+            } else {
+                if(blif.outputs.includes(v)) {
+                    lines.push(`"${cell.uniqueName}" -> "${v}";`)
+                } else {
+                    ins[v] = cell.uniqueName
+                }
+            }
+        }
+    })
+    for(const [k, v] of Object.entries(outs)) {
+        for(const o of v) {
+            if(k in ins) {
+                lines.push(`"${ins[k]}" -> "${o}";`)
+            } else {
+                lines.push(`"${k}" -> "${o}";`)
+            }
+        }
+    }
+    lines.push('}')
+
+    return lines.join('\n')
+}
+
 async function run() {
     const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
+    //console.log(blifToDOT(blif))
 
     
     const ctx = makeAudioContext()
@@ -64,7 +109,7 @@ async function run() {
         for(var i = 0; i < ticks; i++) {
             const ibuf: number[][] = []
             blif.inputs.forEach(input => ibuf.push([ inputs[input] ]))
-            
+
             const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
             inb.connect(isplit)
             
@@ -137,15 +182,22 @@ async function run() {
         }
     })
 
-    blif.outputs.forEach((output, i) => {
-        nodes[output].connect(omerge, 0, i)
-    })
+    blif.outputs.forEach((output, i) => nodes[output].connect(omerge, 0, i))
 
 
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
-    for(var i = 0; i < 10; i++) {
+    inputs['clk'] = 0
+    inputs['reset'] = 0
+    await tick()
+    //console.log(outputs)
+
+
+    for(var i = 0; i < 2; i++) {
+        // inputs['clk'] = 0
+        // inputs['reset'] = 0
+        // await tick()
         inputs['clk'] = 1
         inputs['reset'] = 0
         await tick()
@@ -155,6 +207,9 @@ async function run() {
         console.log(outputs)
     }
 
+    // inputs['clk'] = 0
+    // inputs['reset'] = 1
+    // await tick()
     inputs['clk'] = 1
     inputs['reset'] = 1
     await tick()

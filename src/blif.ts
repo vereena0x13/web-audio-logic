@@ -2,9 +2,14 @@ import { Dictionary } from "./util"
 
 export class BLIFCell {
     constructor(
+        readonly id: number,
         readonly name: string,
         readonly connections: Dictionary<string>
     ) {}
+
+    get uniqueName() {
+        return `${this.name}${this.id}`
+    }
 }
 
 export class BLIFNames {
@@ -46,6 +51,7 @@ export function parseBLIF(src: string): BLIF {
     const names: BLIFNames[] = []
     const cells: BLIFCell[] = []
 
+    var cellid = 0
     var reread = false
     var line: string
     while(currentLine < lines.length) {
@@ -102,7 +108,7 @@ export function parseBLIF(src: string): BLIF {
                     const parts = token.split('=')
                     connections[parts[0]] = parts[1]
                 })
-                cells.push(new BLIFCell(name, connections))
+                cells.push(new BLIFCell(cellid++, name, connections))
                 break
             }
             case '.end': {
