@@ -1,7 +1,6 @@
+import { assert } from "./util"
+
 export function makeBufferGate(ctx: BaseAudioContext, input?: AudioNode): AudioNode {
-    //const shaper = new WaveShaperNode(ctx, {
-    //    curve: new Float32Array([0, 2])
-    //})
     const node = ctx.createGain()
     input?.connect(node)
     return node
@@ -80,7 +79,7 @@ export function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): Audio
     var last = data[0].length
     for(var channel = 0; channel < data.length; channel++) {
         const cdata = data[channel]
-        if(cdata.length != last) throw new Error("invalid data length")
+        assert(cdata.length === last, 'invalid data length')
         const chan = buf.getChannelData(channel)
         for(var i = 0; i < cdata.length; i++) {
             const start = i * 128
