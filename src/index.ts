@@ -2,10 +2,11 @@ import { WorkerUrl } from 'worker-url'
 import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
 import { BLIF, parseBLIF } from './blif'
 
-function makeBufferGate(ctx: BaseAudioContext): AudioNode {
+function makeBufferGate(ctx: BaseAudioContext, input?: AudioNode): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
         curve: new Float32Array([0, 2])
     })
+    input?.connect(shaper)
     return shaper
 }
 
@@ -46,6 +47,12 @@ function makeAndGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNo
     return makeNorGate(ctx, anot, bnot)
 }
 
+function makeXorGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
+    const n = makeNandGate(ctx, a, b);
+    const o = makeOrGate(ctx, a, b);
+    return makeAndGate(ctx, n, o);
+}
+
 function makeSRNorLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
     const buf1 = ctx.createGain()
     const buf2 = ctx.createGain()
@@ -61,6 +68,14 @@ function makeDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): Audi
     const dac = makeAndGate(ctx, clk, dat)
     const ndac = makeAndGate(ctx, clk, ndat)
     return makeSRNorLatch(ctx, dac, ndac)
+}
+
+function makeMSDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
+    const nclk = makeNotGate(ctx, clk)
+    const latch1 = makeDLatch(ctx, nclk, dat)
+    const nclk2 = makeNotGate(ctx, nclk)
+    const latch2 = makeDLatch(ctx, nclk2, latch1)
+    return latch2
 }
 
 function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): AudioBuffer {
@@ -100,7 +115,7 @@ function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, se
 }
 
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/and3.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
 
@@ -110,11 +125,10 @@ async function run() {
 
     await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./recorder-worklet.ts', import.meta.url), { name: 'recorder-processor' }))
 
-    const max_io = max(blif.inputs.length, blif.outputs.length)
     const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
-        channelCount: max_io,
+        channelCount: blif.outputs.length,
     })
 
     var packets: number[][] = []
@@ -127,6 +141,31 @@ async function run() {
 
 
     const nodes: Dictionary<AudioNode> = {}
+    const toConnect: Dictionary<AudioNode> = {}
+
+    function getNode(name: string): AudioNode {
+        if(name in nodes) return nodes[name]
+        const b = ctx.createGain()
+        nodes[name] = b
+        toConnect[name] = b
+        return b
+    }
+
+    function setNode(name: string, node: AudioNode) {
+        if(name in nodes) {
+            const n = nodes[name]
+            if(!(n instanceof GainNode)) throw new Error()
+            if(name in toConnect) {
+                delete toConnect[name]
+            } else {
+                throw new Error()
+            }
+            node.connect(n)
+        } else {
+            nodes[name] = node
+        }
+    }
+
     blif.inputs.forEach((input, i) => {
         const n = ctx.createGain()
         nodes[input] = n
@@ -136,10 +175,43 @@ async function run() {
     blif.cells.forEach((cell, i) => {
         switch(cell.name) {
             case 'AND': {
-                const a = nodes[cell.connections['A']]
-                const b = nodes[cell.connections['B']]
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
                 const y = makeAndGate(ctx, a, b)
-                nodes[cell.connections['Y']] = y
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NOT': {
+                const a = getNode(cell.connections['A'])
+                const y = makeNotGate(ctx, a)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NAND': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeNandGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'XOR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeXorGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'DFF': {
+                const c = getNode(cell.connections['C'])
+                const d = getNode(cell.connections['D'])
+                const q = makeMSDLatch(ctx, c, d)
+                setNode(cell.connections['Q'], q)
+                break
+            }
+            case 'BUF': {
+                const a = getNode(cell.connections['A'])
+                const y = makeBufferGate(ctx, a)
+                setNode(cell.connections['Y'], y)
                 break
             }
             default: {
@@ -154,18 +226,35 @@ async function run() {
     })
 
 
+    for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
+
+    const clks = Array.from({ length: 32 }, () => [0, 1]).flat()
+    const rsts = new Array(clks.length).fill(0)
     const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 1, 1, 1, 0],
-        [0, 0, 1, 1, 0, 0],
-        [0, 1, 1, 1, 1, 1]
+        clks,
+        rsts
     ]))
+    const npkts = clks.length
+    
+    //const npkts = 4
+    //const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+    //    [0, 1, 0, 1],
+    //    [0, 0, 1, 1]
+    //]))
+    
+    //const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+    //    [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    //    [0, 0, 0, 1, 1, 0, 0, 0, 0]
+    //]))
+    //const npkts = 9
+
     inb.connect(isplit)
 
-    recorder.port.postMessage(6)
+    recorder.port.postMessage(npkts)
     
     inb.start()
-    while(packets.length < 6) {
+    while(packets.length < npkts) {
         await sleep(0)
     }
     inb.stop()
@@ -191,9 +280,8 @@ async function run() {
 
 
     const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 1, 1, 1, 0],
-        [0, 0, 1, 1, 0, 0],
-        [0, 1, 1, 1, 1, 1]
+        [0, 1, 0, 1],
+        [0, 0, 1, 1]
     ]))
 
     const splitter = ctx.createChannelSplitter(3)
@@ -201,26 +289,24 @@ async function run() {
 
     const a = ctx.createGain()
     const b = ctx.createGain()
-    const c = ctx.createGain()
     splitter.connect(a, 0)
     splitter.connect(b, 1)
-    splitter.connect(c, 2)
 
-    const a0 = makeAndGate(ctx, a, b)
-    const a1 = makeAndGate(ctx, a0, c)
+    const y = makeXorGate(ctx, a, b)
 
-    a1.connect(recorder)
+    y.connect(recorder)
 
-    recorder.port.postMessage(6)
+    recorder.port.postMessage(4)
     
     inb.start()
-    while(packets.length < 6) {
+    while(packets.length < 4) {
         await sleep(0)
     }
     inb.stop()
 
     console.log(packets)
     */
+
 
     /*
     const clks = Array.from({ length: 32 }, () => [0, 1]).flat()
