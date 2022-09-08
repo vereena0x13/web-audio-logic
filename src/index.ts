@@ -100,7 +100,7 @@ function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, se
 }
 
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/and3.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/and3.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
 
@@ -133,7 +133,6 @@ async function run() {
         isplit.connect(n, i)
     })    
     
-
     blif.cells.forEach((cell, i) => {
         switch(cell.name) {
             case 'AND': {
@@ -150,7 +149,6 @@ async function run() {
         }
     })
 
-    
     blif.outputs.forEach((output, i) => {
         nodes[output].connect(omerge, 0, i)
     })
