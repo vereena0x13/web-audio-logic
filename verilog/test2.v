@@ -1,20 +1,15 @@
 module test2(
-    input wire a,
-    input wire b,
-    input wire c,
+    input wire clk,
     output wire y
 );
 
-    wire ay;
-    or2 a0(
-        .a(a),
-        .b(b),
-        .y(ay)
+    wire ff0;
+    dff1 g0(
+        .clk(clk),
+        .dat(~ff0),
+        .q(ff0)
     );
-    and2 o0(
-        .a(ay),
-        .b(c),
-        .y(y)
-    );
+
+    assign y = ff0;
 
 endmodule

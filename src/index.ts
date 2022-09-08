@@ -48,11 +48,7 @@ async function run() {
 
     console.log(blifs)
     const top = blifs[0]
-    //const blif = blifs[0]
-    //const blif = parseBLIF(src)
-    //console.log(blif)
-    //console.log(blifToDOT(blif))
-
+ 
     
     const ctx = makeAudioContext()
 
@@ -80,7 +76,7 @@ async function run() {
 
     function getNode(name: string, forceExist: boolean = false): AudioNode {
         if(name in nodes) return nodes[name]
-        if(forceExist) assert(false, `'${name}' does not exist`)
+        assert(!forceExist, `'${name}' does not exist`)
         const b = ctx.createGain()
         nodes[name] = b
         toConnect[name] = b
@@ -91,7 +87,7 @@ async function run() {
         if(name in nodes) {
             assert(name in toConnect, `'${name}' not in toConnect`)
             const n = nodes[name]
-            assert(n instanceof GainNode)
+            assert(n instanceof GainNode, `attempt to connect (${node}) to a non-gain node '${name}' (${n}) via setNode`)
             delete toConnect[name]
             node.connect(n)
         } else {
@@ -148,6 +144,9 @@ async function run() {
     function buildBLIFGraph(blif: BLIF): string {
         const id = `${blif.model}${bgid++}`
 
+        /*
+        TODO
+
         function makePLA(names: BLIFNames): AudioNode {
             // TODO: handle special cases: zero cover; one cover that is just a 1 (i.e. a constant 0 or 1); also
             //       handle the case when the PLA is just implementing a buffer gate
@@ -192,9 +191,9 @@ async function run() {
         }
         
         blif.names.forEach((name, i) => {
-            // TODO
-            // setNode(name.output, makePLA(name))
+            setNode(name.output, makePLA(name))
         })
+        */
     
         blif.cells.forEach(cell => {
             switch(cell.name) {
@@ -256,15 +255,20 @@ async function run() {
                     if(cell.name in blifByName) {
                         const cid = buildBLIFGraph(blifByName[cell.name])
                         for(const [k, v] of Object.entries(cell.connections)) {
+                            var left = cid + k
+                            var right = id + v                            
                             if(blif.inputs.includes(k)) {
-                                console.log(`connect ${id+v} to ${cid+k}`)
-                                //setNode(id + v, getNode(cid + k))
-                                getNode(id + v, true).connect(getNode(cid + k))
-                            } else {
-                                console.log(`connect ${cid+k} to ${id+v}`)
-                                getNode(cid + k, true).connect(getNode(id + v))
-                                //setNode(cid + k, getNode(id + v))
+                                const t = left
+                                left = right
+                                right = t
                             }
+
+                            console.log(`${left}.connect(${right})`)
+                            getNode(left, true).connect(getNode(right, true))
+
+                            if(left in toConnect) delete toConnect[left]
+                            else if(right in toConnect) delete toConnect[right]
+                            else assert(false, '?')
                         }
                         console.log(cid, cell, nodes)
                     } else {
@@ -289,12 +293,10 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
-    for(var i = 0; i < 8; i++) {
-        const b = numberToBits(i, 3)
-        inputs['a'] = b[0]
-        inputs['b'] = b[1]
-        inputs['c'] = b[2]
-        console.log(inputs)
+    for(var i = 0; i < 4; i++) {
+        inputs['clk'] = 1
+        await tick()
+        inputs['clk'] = 0
         await tick()
         console.log(outputs)
     }
