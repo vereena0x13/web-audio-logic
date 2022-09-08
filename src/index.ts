@@ -4,16 +4,34 @@ import { BLIF, parseBLIF, blifToDOT, BLIFNames } from './blif'
 import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeDLatch, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
 
-function computeBusses(xs: string[]): Dictionary<number> {
-    const busses: Dictionary<number> = {}
-    xs
-        .filter(x => x.includes('['))
-        .forEach(x => {
+class Bus {
+    constructor(
+        readonly name: string,
+        readonly size: number
+    ) {}
+}
+
+function computeBuses(xs: string[]): Bus[] {
+    const sizes: Dictionary<number> = {}
+    xs.forEach(x => {
+        if(x.includes('[')) {
             const name = x.substring(0, x.indexOf('['))
-            if(!(name in busses)) busses[name] = 0
-            busses[name]++
-        })
-    return busses
+            if(!(name in sizes)) sizes[name] = 0
+            sizes[name]++
+        } else {
+            sizes[x] = 1
+        }
+    })
+    const buses: Bus[] = []
+    xs.forEach(x => {
+        var name = x
+        if(x.includes('[')) {
+            name = x.substring(0, x.indexOf('['))
+            if(buses.length > 0 && name === buses[buses.length-1].name) return
+        }
+        buses.push(new Bus(name, sizes[name]))
+    })
+    return buses
 }
 
 
@@ -68,33 +86,28 @@ async function run() {
         }
     }
 
-    const rawOutputs: Dictionary<number> = {}
-
-    const inputBusses = computeBusses(blif.inputs)
-    const outputBusses = computeBusses(blif.outputs)
+    const inputBuses = computeBuses(blif.inputs)
+    const outputBuses = computeBuses(blif.outputs)
 
     const inputs: Dictionary<number> = {}
     const outputs: Dictionary<number> = {}
         
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
-            const rawInputs: Dictionary<number> = {}
+            const ibuf: number[][] = []
+            inputBuses.forEach(bus => {
+                if(bus.size === 1) {
+                    ibuf.push([inputs[bus.name]])
+                } else {
+                    const bits = numberToBits(inputs[bus.name], bus.size)
+                    bits.forEach(bit => ibuf.push([bit]))
+                }
+            })
 
-            for(const [name, size] of Object.entries(inputBusses)) {
-                if(inputs[name] < 0) console.log(`${name} = ${inputs[name]}`)
-                const bits = numberToBits(inputs[name], size)
-                bits.forEach((bit, j) => rawInputs[`${name}[${j}]`] = bit)
-            }
-            blif.inputs
-                .filter(input => !input.includes('['))
-                .forEach(input => rawInputs[input] = inputs[input])
-
-            const ibuf = blif.inputs.map(input => [rawInputs[input]])
             const bs = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
             bs.connect(isplit)
             
             packet = null
-
             recorder.port.postMessage(1)
             bs.start()
             while(packet === null) {
@@ -103,18 +116,15 @@ async function run() {
             bs.stop()
             bs.disconnect()
 
-            blif.outputs.forEach((output, j) => rawOutputs[output] = packet![j])
-
-            for(const [name, size] of Object.entries(outputBusses)) {
-                const bits = []
-                for(var bit = 0; bit < size; bit++) {
-                    bits.push(rawOutputs[`${name}[${bit}]`])
+            var j = 0
+            outputBuses.forEach(bus => {
+                if(bus.size === 1) {
+                    outputs[bus.name] = packet![j]
+                } else {
+                    outputs[bus.name] = bitsToNumber(packet!.slice(j, j + bus.size))
                 }
-                outputs[name] = bitsToNumber(bits)
-            }
-            blif.outputs
-                .filter(output => !output.includes('['))
-                .forEach(output => outputs[output] = rawOutputs[output])
+                j += bus.size
+            })
         }
     }
 

@@ -61,7 +61,7 @@ export function bitsToNumber(bits: number[], bitorder: BitOrder = 'LSBFIRST'): n
 }
 
 export function numberToBits(n: number, bits: number, bitorder: BitOrder = 'LSBFIRST'): number[] {
-    //assert(n >= 0, 'numberToBits only supports unsigned numbers')
+    assert(n >= 0, 'numberToBits only supports unsigned numbers')
     assert(n < 2**bits, `number (${n}) of range [0,${2**bits})`)
     const result = new Array<number>(bits)
     for(var i = 0; i < bits; i++) {
