@@ -18,7 +18,7 @@ function computeBusses(xs: string[]): Dictionary<number> {
 
 
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/add1.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/subleq.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
     //console.log(blifToDOT(blif))
@@ -68,7 +68,6 @@ async function run() {
         }
     }
 
-    const rawInputs: Dictionary<number> = {}
     const rawOutputs: Dictionary<number> = {}
 
     const inputBusses = computeBusses(blif.inputs)
@@ -79,7 +78,10 @@ async function run() {
         
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
+            const rawInputs: Dictionary<number> = {}
+
             for(const [name, size] of Object.entries(inputBusses)) {
+                if(inputs[name] < 0) console.log(`${name} = ${inputs[name]}`)
                 const bits = numberToBits(inputs[name], size)
                 bits.forEach((bit, j) => rawInputs[`${name}[${j}]`] = bit)
             }
@@ -239,11 +241,106 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
+    inputs['i_rdata'] = 0
+    inputs['i_rstn'] = 1
+
+    const mem = new Array(256).fill(0)
+    const code = [0, 0, 47, 0, -1, 1, 2, 3, 4, 10, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 48, 45, 10, 100, 1000, 10000, 24, 72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 10, 0, 29, 0, 0, 46, 46, 50, 62, 62, 53, 44, 3, 56, 3, 62, 59, 3, 3, 62, 0, 3, 65, 3, 46, 68, 3, 3, 71, 3, 46, 77, 3, 3, 86, 46, 3, 83, 3, 3, 86, 3, 3, 101, 46, 3, 89, 3, -7, 92, 3, 3, 95, 4, 44, 98, 3, 3, 47, 3, 3, 101]
+    code.forEach((v, i) => mem[i] = v)
+
+    function unsign(n: number): number {
+        return n & 0xFF
+    }
+
+    function sign(n: number): number {
+        const r = unsign(n)
+        return r > 0x7F ? r - 0x100 : r
+    }
+
+    var printBuffer: number[] = []
+
+    const cycleLabel = document.createElement('p')
+    document.body.appendChild(cycleLabel)
+
+    inputs['i_clk'] = 1
+    inputs['i_rstn'] = 0
+    await tick(2)
+    inputs['i_clk'] = 0
+    await tick()
+    inputs['i_rstn'] = 1
+
+    for(var i = 0; i < 2688; i++) {
+        cycleLabel.innerHTML = `${i}`
+
+        inputs['i_clk'] = 1
+        await tick()
+        inputs['i_clk'] = 0
+        await tick()
+
+        const waddr = sign(outputs['o_waddr'])
+        const wdata = sign(outputs['o_wdata'])
+        const raddr = sign(outputs['o_raddr'])
+
+        if(outputs['o_we'] === 1) {
+            if(waddr < 0) {
+                if(waddr == -7) {
+                    if(wdata == 10) {
+                        console.log(String.fromCharCode(...printBuffer))
+                        printBuffer = []
+                    } else {
+                        printBuffer.push(wdata)
+                    }
+                }
+            } else {
+                mem[waddr] = wdata
+            }
+        }
+        inputs['i_rdata'] = raddr < 0 ? 0 : unsign(mem[raddr])
+    }
+
+
+    /*
+    for(var i = 0; i < 8; i++) {
+        inputs['addr'] = i
+        inputs['data_in'] = i & 3
+        inputs['we'] = 1
+        inputs['clk'] = 1
+        await tick()
+        inputs['clk'] = 0
+        await tick()
+        inputs['we'] = 0
+        await tick()
+        console.log(outputs)
+    }
+
+    for(var i = 0; i < 8; i++) {
+        inputs['addr'] = i
+        await tick()
+        //console.log(outputs)
+    }
+    */
+
+    /*
+    inputs['addr'] = 0
+    inputs['data_in'] = 2
+    inputs['we'] = 1
+    inputs['clk'] = 1
+    await tick()
+    inputs['clk'] = 0
+    await tick()
+    inputs['we'] = 0
+    await tick()
+    console.log(outputs)
+    */
+
+
+    /*
     for(var i = 0; i < 8; i++) {
         inputs['a'] = i
         await tick()
         console.log(outputs)
     }
+    */
 
 
     /*

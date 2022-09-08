@@ -1,4 +1,4 @@
-library(quan) {
+library(gates) {
   cell(BUF) {
     area: 1
     pin(A) {
@@ -20,7 +20,7 @@ library(quan) {
       direction: output;
     }
   }
-  
+
   cell(AND) {
     area: 5
     pin(A) {
