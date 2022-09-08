@@ -1,118 +1,7 @@
 import { WorkerUrl } from 'worker-url'
 import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
 import { BLIF, parseBLIF } from './blif'
-
-function makeBufferGate(ctx: BaseAudioContext, input?: AudioNode): AudioNode {
-    const shaper = new WaveShaperNode(ctx, {
-        curve: new Float32Array([0, 2])
-    })
-    input?.connect(shaper)
-    return shaper
-}
-
-function makeNotGate(ctx: BaseAudioContext, input: AudioNode): AudioNode {
-    const shaper = new WaveShaperNode(ctx, {
-        curve: new Float32Array([2, 0])
-    })
-    input.connect(shaper)
-    return shaper
-}
-
-function makeOrGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const or = ctx.createGain()
-    or.gain.value = 2
-    a.connect(or)
-    b.connect(or)
-    const shaper = new WaveShaperNode(ctx, {
-        curve: new Float32Array([-1, 1])
-    })
-    or.connect(shaper)
-    return shaper
-}
-
-function makeNorGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const or = makeOrGate(ctx, a, b)
-    return makeNotGate(ctx, or)
-}
-
-function makeNandGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const anot = makeNotGate(ctx, a)
-    const bnot = makeNotGate(ctx, b)
-    return makeOrGate(ctx, anot, bnot)
-}
-
-function makeAndGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const anot = makeNotGate(ctx, a)
-    const bnot = makeNotGate(ctx, b)
-    return makeNorGate(ctx, anot, bnot)
-}
-
-function makeXorGate(ctx: BaseAudioContext, a: AudioNode, b: AudioNode): AudioNode {
-    const n = makeNandGate(ctx, a, b);
-    const o = makeOrGate(ctx, a, b);
-    return makeAndGate(ctx, n, o);
-}
-
-function makeSRNorLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
-    const buf1 = ctx.createGain()
-    const buf2 = ctx.createGain()
-    const nor1 = makeNorGate(ctx, r, buf1)
-    nor1.connect(buf2)
-    const nor2 = makeNorGate(ctx, s, buf2)
-    nor2.connect(buf1)
-    return nor1
-}
-
-function makeDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
-    const ndat = makeNotGate(ctx, dat)
-    const dac = makeAndGate(ctx, clk, dat)
-    const ndac = makeAndGate(ctx, clk, ndat)
-    return makeSRNorLatch(ctx, dac, ndac)
-}
-
-function makeMSDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
-    const nclk = makeNotGate(ctx, clk)
-    const latch1 = makeDLatch(ctx, nclk, dat)
-    const nclk2 = makeNotGate(ctx, nclk)
-    const latch2 = makeDLatch(ctx, nclk2, latch1)
-    return latch2
-}
-
-function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): AudioBuffer {
-    const buf = ctx.createBuffer(data.length, data[0].length * 128, 44100)
-    var last = data[0].length
-    for(var channel = 0; channel < data.length; channel++) {
-        const cdata = data[channel]
-        if(cdata.length != last) throw new Error("invalid data length")
-        const chan = buf.getChannelData(channel)
-        for(var i = 0; i < cdata.length; i++) {
-            const start = i * 128
-            const end = (i + 1) * 128
-            chan.fill(cdata[i], start, end)
-        }
-    }
-    return buf
-}
-
-function makeBufferSource(ctx: BaseAudioContext, buf: AudioBuffer): AudioBufferSourceNode {
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    return src
-}
-
-function makeMultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
-    const nsel = makeNotGate(ctx, sel)
-    const o0 = makeAndGate(ctx, y, nsel)
-    const o1 = makeAndGate(ctx, y, sel)
-    return [o0, o1]
-}
-
-function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, sel: AudioNode) {
-    const nsel = makeNotGate(ctx, sel)
-    const o0 = makeAndGate(ctx, a, nsel)
-    const o1 = makeAndGate(ctx, b, sel)
-    return makeOrGate(ctx, o0, o1)
-}
+import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
 async function run() {
     const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
@@ -131,8 +20,10 @@ async function run() {
         channelCount: blif.outputs.length,
     })
 
-    var packets: number[][] = []
-    recorder.port.onmessage = e => packets.push(framesToBits(e.data[0]))
+    //var packets: number[][] = []
+    //recorder.port.onmessage = e => packets.push(framesToBits(e.data[0]))
+    var packet: number[] | null = null
+    recorder.port.onmessage = e => packet = framesToBits(e.data[0])
 
 
     const isplit = ctx.createChannelSplitter(blif.inputs.length)
@@ -166,11 +57,36 @@ async function run() {
         }
     }
 
+    const inputs: Dictionary<number> = {}
+    const outputs: Dictionary<number> = {}
+
+    async function tick(ticks: number = 1) {
+        for(var i = 0; i < ticks; i++) {
+            const ibuf: number[][] = []
+            blif.inputs.forEach(input => ibuf.push([ inputs[input] ]))
+            
+            const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
+            inb.connect(isplit)
+            
+            packet = null
+            
+            recorder.port.postMessage(1)
+            inb.start()
+            while(packet === null) {
+                await sleep(0)
+            }
+            inb.stop()
+            inb.disconnect()
+
+            blif.outputs.forEach((output, j) => outputs[output] = packet![j])
+        }
+    }
+
     blif.inputs.forEach((input, i) => {
         const n = ctx.createGain()
         nodes[input] = n
         isplit.connect(n, i)
-    })    
+    })
     
     blif.cells.forEach((cell, i) => {
         switch(cell.name) {
@@ -229,6 +145,28 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
+    for(var i = 0; i < 10; i++) {
+        inputs['clk'] = 1
+        inputs['reset'] = 0
+        await tick()
+        inputs['clk'] = 0
+        inputs['reset'] = 0
+        await tick()
+        console.log(outputs)
+    }
+
+    inputs['clk'] = 1
+    inputs['reset'] = 1
+    await tick()
+    inputs['clk'] = 0
+    inputs['reset'] = 1
+    await tick()
+    console.log(outputs)
+
+
+
+
+    /*
     const clks = Array.from({ length: 32 }, () => [0, 1]).flat()
     const rsts = new Array(clks.length).fill(0)
     const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
@@ -260,7 +198,7 @@ async function run() {
     inb.stop()
 
     console.log(packets)
-
+    */
 
 
     /*
