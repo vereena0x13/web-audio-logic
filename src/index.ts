@@ -4,11 +4,24 @@ import { BLIF, parseBLIF, blifToDOT, BLIFNames } from './blif'
 import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeDLatch, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
 
+function computeBusses(xs: string[]): Dictionary<number> {
+    const busses: Dictionary<number> = {}
+    xs
+        .filter(x => x.includes('['))
+        .forEach(x => {
+            const name = x.substring(0, x.indexOf('['))
+            if(!(name in busses)) busses[name] = 0
+            busses[name]++
+        })
+    return busses
+}
+
+
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/add1.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
-    console.log(blifToDOT(blif))
+    //console.log(blifToDOT(blif))
 
     
     const ctx = makeAudioContext()
@@ -55,12 +68,26 @@ async function run() {
         }
     }
 
+    const rawInputs: Dictionary<number> = {}
+    const rawOutputs: Dictionary<number> = {}
+
+    const inputBusses = computeBusses(blif.inputs)
+    const outputBusses = computeBusses(blif.outputs)
+
     const inputs: Dictionary<number> = {}
     const outputs: Dictionary<number> = {}
-
+        
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
-            const ibuf = blif.inputs.map(input => [inputs[input]])
+            for(const [name, size] of Object.entries(inputBusses)) {
+                const bits = numberToBits(inputs[name], size)
+                bits.forEach((bit, j) => rawInputs[`${name}[${j}]`] = bit)
+            }
+            blif.inputs
+                .filter(input => !input.includes('['))
+                .forEach(input => rawInputs[input] = inputs[input])
+
+            const ibuf = blif.inputs.map(input => [rawInputs[input]])
             const bs = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
             bs.connect(isplit)
             
@@ -74,7 +101,18 @@ async function run() {
             bs.stop()
             bs.disconnect()
 
-            blif.outputs.forEach((output, j) => outputs[output] = packet![j])
+            blif.outputs.forEach((output, j) => rawOutputs[output] = packet![j])
+
+            for(const [name, size] of Object.entries(outputBusses)) {
+                const bits = []
+                for(var bit = 0; bit < size; bit++) {
+                    bits.push(rawOutputs[`${name}[${bit}]`])
+                }
+                outputs[name] = bitsToNumber(bits)
+            }
+            blif.outputs
+                .filter(output => !output.includes('['))
+                .forEach(output => outputs[output] = rawOutputs[output])
         }
     }
 
@@ -201,6 +239,13 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
+    for(var i = 0; i < 8; i++) {
+        inputs['a'] = i
+        await tick()
+        console.log(outputs)
+    }
+
+
     /*
     inputs['dat'] = 1
     inputs['clk'] = 1
@@ -220,6 +265,7 @@ async function run() {
     */
 
     
+    /*
     inputs['clk'] = 0
     inputs['rst'] = 0
     await tick()
@@ -249,6 +295,7 @@ async function run() {
     inputs['rst'] = 1
     await tick()
     console.log(outputs)
+    */
 }
 
 

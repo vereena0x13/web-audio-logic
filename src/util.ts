@@ -61,11 +61,13 @@ export function bitsToNumber(bits: number[], bitorder: BitOrder = 'LSBFIRST'): n
 }
 
 export function numberToBits(n: number, bits: number, bitorder: BitOrder = 'LSBFIRST'): number[] {
+    assert(n >= 0, 'numberToBits only supports unsigned numbers')
+    assert(n < 2**bits, `number of range [0,${2**bits})`)
     const result = new Array<number>(bits)
     for(var i = 0; i < bits; i++) {
         const j = bitorder === 'MSBFIRST' ? (bits - 1 - i) : i
         const bit = (n & (1 << j)) != 0
-        result.push(bit ? 1 : 0)
+        result[i] = bit ? 1 : 0
     }
     return result
 }
