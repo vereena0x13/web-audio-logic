@@ -95,14 +95,14 @@ async function run() {
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
             const ibuf: number[][] = []
-            inputBuses.forEach(bus => {
+            for(const bus of inputBuses) {
                 if(bus.size === 1) {
                     ibuf.push([inputs[bus.name]])
                 } else {
                     const bits = numberToBits(inputs[bus.name], bus.size)
-                    bits.forEach(bit => ibuf.push([bit]))
+                    for(const bit of bits) ibuf.push([bit])
                 }
-            })
+            }
 
             const bs = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
             bs.connect(isplit)
@@ -116,15 +116,16 @@ async function run() {
             bs.stop()
             bs.disconnect()
 
+            const pkt: number[] = packet! // NOTE: typescript bug; shouldn't have to declare pkt
             var j = 0
-            outputBuses.forEach(bus => {
+            for(const bus of outputBuses) {
                 if(bus.size === 1) {
-                    outputs[bus.name] = packet![j]
+                    outputs[bus.name] = pkt[j]
                 } else {
-                    outputs[bus.name] = bitsToNumber(packet!.slice(j, j + bus.size))
+                    outputs[bus.name] = bitsToNumber(pkt.slice(j, j + bus.size))
                 }
                 j += bus.size
-            })
+            }
         }
     }
 
@@ -307,102 +308,6 @@ async function run() {
         }
         inputs['i_rdata'] = raddr < 0 ? 0 : unsign(mem[raddr])
     }
-
-
-    /*
-    for(var i = 0; i < 8; i++) {
-        inputs['addr'] = i
-        inputs['data_in'] = i & 3
-        inputs['we'] = 1
-        inputs['clk'] = 1
-        await tick()
-        inputs['clk'] = 0
-        await tick()
-        inputs['we'] = 0
-        await tick()
-        console.log(outputs)
-    }
-
-    for(var i = 0; i < 8; i++) {
-        inputs['addr'] = i
-        await tick()
-        //console.log(outputs)
-    }
-    */
-
-    /*
-    inputs['addr'] = 0
-    inputs['data_in'] = 2
-    inputs['we'] = 1
-    inputs['clk'] = 1
-    await tick()
-    inputs['clk'] = 0
-    await tick()
-    inputs['we'] = 0
-    await tick()
-    console.log(outputs)
-    */
-
-
-    /*
-    for(var i = 0; i < 8; i++) {
-        inputs['a'] = i
-        await tick()
-        console.log(outputs)
-    }
-    */
-
-
-    /*
-    inputs['dat'] = 1
-    inputs['clk'] = 1
-    await tick()
-    inputs['dat'] = 1
-    inputs['clk'] = 0
-    await tick()
-    console.log(outputs)
-
-    inputs['dat'] = 0
-    inputs['clk'] = 1
-    await tick()
-    inputs['dat'] = 0
-    inputs['clk'] = 0
-    await tick()
-    console.log(outputs)
-    */
-
-    
-    /*
-    inputs['clk'] = 0
-    inputs['rst'] = 0
-    await tick()
-    console.log(outputs)
-
-
-    for(var i = 0; i < 4; i++) {
-        // inputs['clk'] = 0
-        // inputs['rst'] = 0
-        // await tick()
-        inputs['clk'] = 1
-        inputs['rst'] = 0
-        await tick()
-        inputs['clk'] = 0
-        inputs['rst'] = 0
-        await tick()
-        console.log(outputs)
-    }
-
-    // inputs['clk'] = 0
-    // inputs['rst'] = 1
-    // await tick()
-    inputs['clk'] = 1
-    inputs['rst'] = 1
-    await tick()
-    inputs['clk'] = 0
-    inputs['rst'] = 1
-    await tick()
-    console.log(outputs)
-    */
 }
 
 
