@@ -8,5 +8,8 @@
     "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^4.9.2",
     "worker-url": "^1.1.0"
+  },
+  "dependencies": {
+    "fetch": "^1.1.0"
   }
 }

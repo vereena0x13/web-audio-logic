@@ -1,3 +1,15 @@
+export type Dictionary<V> = { [key: string]: V }
+
+export function min(a: number, b: number): number {
+    if(a < b) return a
+    return b
+}
+
+export function max(a: number, b: number): number {
+    if(a > b) return a
+    return b
+}
+
 export async function sleep(n: number) {
     await new Promise((resolve) => {
         setTimeout(() => resolve(null), n)
@@ -56,4 +68,17 @@ export function numberToBits(n: number, bits: number, bitorder: BitOrder = 'LSBF
         result.push(bit ? 1 : 0)
     }
     return result
+}
+
+export function makeAudioContext(): AudioContext {
+    const ctx = new AudioContext()
+
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    src.start()
+    if(ctx.resume) ctx.resume()
+
+    return ctx
 }

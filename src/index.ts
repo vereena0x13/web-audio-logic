@@ -1,5 +1,6 @@
 import { WorkerUrl } from 'worker-url'
-import { sleep, frameToBit, framesToBits, bitsToNumber, numberToBits } from './util'
+import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
+import { BLIF, parseBLIF } from './blif'
 
 function makeBufferGate(ctx: BaseAudioContext): AudioNode {
     const shaper = new WaveShaperNode(ctx, {
@@ -62,21 +63,6 @@ function makeDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): Audi
     return makeSRNorLatch(ctx, dac, ndac)
 }
 
-function makeDelayLatch(ctx: BaseAudioContext, s: AudioNode, r: AudioNode): AudioNode {
-    const delay = ctx.createDelay()
-    delay.delayTime.value = 1/44100
-    const buf = ctx.createGain()
-    buf.connect(delay)
-    //s.connect(delay)
-    s.connect(buf)
-    
-    const and = makeAndGate(ctx, makeNotGate(ctx, r), buf)
-    //and.connect(delay)
-    and.connect(buf)
-    
-    return delay
-}
-
 function makeSampleBuffer(ctx: BaseAudioContext, data: number[][]): AudioBuffer {
     const buf = ctx.createBuffer(data.length, data[0].length * 128, 44100)
     var last = data[0].length
@@ -99,19 +85,6 @@ function makeBufferSource(ctx: BaseAudioContext, buf: AudioBuffer): AudioBufferS
     return src
 }
 
-function makeAudioContext(): AudioContext {
-    const ctx = new AudioContext()
-
-    const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    src.connect(ctx.destination)
-    src.start()
-    if(ctx.resume) ctx.resume()
-
-    return ctx
-}
-
 function makeMultiplexor(ctx: BaseAudioContext, y: AudioNode, sel: AudioNode): AudioNode[] {
     const nsel = makeNotGate(ctx, sel)
     const o0 = makeAndGate(ctx, y, nsel)
@@ -127,6 +100,83 @@ function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioNode, se
 }
 
 async function run() {
+    const src = await (await fetch('http://127.0.0.1:8081/and3.blif')).text()
+    const blif = parseBLIF(src)
+    console.log(blif)
+
+    
+    const ctx = makeAudioContext()
+
+
+    await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./recorder-worklet.ts', import.meta.url), { name: 'recorder-processor' }))
+
+    const max_io = max(blif.inputs.length, blif.outputs.length)
+    const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: max_io,
+    })
+
+    var packets: number[][] = []
+    recorder.port.onmessage = e => packets.push(framesToBits(e.data[0]))
+
+
+    const isplit = ctx.createChannelSplitter(blif.inputs.length)
+    const omerge = ctx.createChannelMerger(blif.outputs.length)
+    omerge.connect(recorder)
+
+
+    const nodes: Dictionary<AudioNode> = {}
+    blif.inputs.forEach((input, i) => {
+        const n = ctx.createGain()
+        nodes[input] = n
+        isplit.connect(n, i)
+    })    
+    
+
+    blif.cells.forEach((cell, i) => {
+        switch(cell.name) {
+            case 'AND': {
+                const a = nodes[cell.connections['A']]
+                const b = nodes[cell.connections['B']]
+                const y = makeAndGate(ctx, a, b)
+                nodes[cell.connections['Y']] = y
+                break
+            }
+            default: {
+                console.log(`WARNING: Unknown cell type: '${cell.name}'`)
+                break
+            }
+        }
+    })
+
+    
+    blif.outputs.forEach((output, i) => {
+        nodes[output].connect(omerge, 0, i)
+    })
+
+
+
+    const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
+        [0, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1, 1]
+    ]))
+    inb.connect(isplit)
+
+    recorder.port.postMessage(6)
+    
+    inb.start()
+    while(packets.length < 6) {
+        await sleep(0)
+    }
+    inb.stop()
+
+    console.log(packets)
+
+
+
+    /*
     const ctx = makeAudioContext()
 
 
@@ -143,9 +193,9 @@ async function run() {
 
 
     const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, [
-        [0, 1, 0, 1, 0, 1, 0, 1],
-        [0, 0, 1, 1, 0, 0, 1, 1],
-        [0, 0, 0, 0, 1, 1, 1, 1]
+        [0, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1, 1]
     ]))
 
     const splitter = ctx.createChannelSplitter(3)
@@ -153,24 +203,26 @@ async function run() {
 
     const a = ctx.createGain()
     const b = ctx.createGain()
-    const sel = ctx.createGain()
+    const c = ctx.createGain()
     splitter.connect(a, 0)
     splitter.connect(b, 1)
-    splitter.connect(sel, 2)
+    splitter.connect(c, 2)
 
-    const d = makeDemultiplexor(ctx, a, b, sel)
+    const a0 = makeAndGate(ctx, a, b)
+    const a1 = makeAndGate(ctx, a0, c)
 
-    d.connect(recorder)
+    a1.connect(recorder)
 
-    recorder.port.postMessage(8)
+    recorder.port.postMessage(6)
     
     inb.start()
-    while(packets.length < 8) {
+    while(packets.length < 6) {
         await sleep(0)
     }
     inb.stop()
 
     console.log(packets)
+    */
 
     /*
     const clks = Array.from({ length: 32 }, () => [0, 1]).flat()
@@ -246,7 +298,7 @@ addEventListener('DOMContentLoaded', () => {
     const btn = document.createElement('button')
     //btn.style.display = 'none'
     btn.innerHTML = 'blåh'
-    btn.style.fontSize = '48px'
+    btn.style.fontSize = '64px'
     btn.onclick = run
     document.body.appendChild(btn)
     //btn.click()
