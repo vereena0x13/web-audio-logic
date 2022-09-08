@@ -1,14 +1,14 @@
 module counter(
 	input wire clk,
 	input wire rst,
-	output reg [1:0] count
+	output reg [2:0] count
 );
 
 	always@(posedge clk) begin
 		if (rst)
-			count <= 2'd0;
+			count <= 3'd0;
 		else
-			count <= count + 2'd1;
+			count <= count + 3'd1;
 	end
 
 endmodule

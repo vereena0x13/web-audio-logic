@@ -68,9 +68,8 @@ export function makeDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode
 
 export function makeMSDLatch(ctx: BaseAudioContext, clk: AudioNode, dat: AudioNode): AudioNode {
     const nclk = makeNotGate(ctx, clk)
-    const latch1 = makeDLatch(ctx, nclk, dat)
-    const nclk2 = makeNotGate(ctx, nclk)
-    const latch2 = makeDLatch(ctx, nclk2, latch1)
+    const latch1 = makeDLatch(ctx, clk, dat)
+    const latch2 = makeDLatch(ctx, nclk, latch1)
     return latch2
 }
 

@@ -1,11 +1,11 @@
 import { WorkerUrl } from 'worker-url'
 import { assert, Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
 import { BLIF, parseBLIF, blifToDOT, BLIFNames } from './blif'
-import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
+import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeDLatch, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
 
 async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/dff1.blif')).text()
+    const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
     console.log(blifToDOT(blif))
@@ -201,30 +201,32 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
-    inputs['dat'] = 1
-    inputs['clk'] = 1
-    await tick()
-    inputs['dat'] = 1
-    inputs['clk'] = 0
-    await tick()
-    console.log(outputs)
-
-    inputs['dat'] = 0
-    inputs['clk'] = 1
-    await tick()
-    inputs['dat'] = 0
-    inputs['clk'] = 0
-    await tick()
-    console.log(outputs)
-
     /*
+    inputs['dat'] = 1
+    inputs['clk'] = 1
+    await tick()
+    inputs['dat'] = 1
+    inputs['clk'] = 0
+    await tick()
+    console.log(outputs)
+
+    inputs['dat'] = 0
+    inputs['clk'] = 1
+    await tick()
+    inputs['dat'] = 0
+    inputs['clk'] = 0
+    await tick()
+    console.log(outputs)
+    */
+
+    
     inputs['clk'] = 0
     inputs['rst'] = 0
     await tick()
     console.log(outputs)
 
 
-    for(var i = 0; i < 2; i++) {
+    for(var i = 0; i < 4; i++) {
         // inputs['clk'] = 0
         // inputs['rst'] = 0
         // await tick()
@@ -247,7 +249,6 @@ async function run() {
     inputs['rst'] = 1
     await tick()
     console.log(outputs)
-    */
 }
 
 
