@@ -1,6 +1,6 @@
 library(quan) {
   cell(AND) {
-    area: 12
+    area: 5
     pin(A) {
       direction: input;
     }
@@ -14,7 +14,7 @@ library(quan) {
   }
 
   cell(NOT) {
-    area: 4
+    area: 1
     pin(A) {
       direction: input;
     }
@@ -25,7 +25,7 @@ library(quan) {
   }
 
   cell(NAND) {
-    area: 9
+    area: 4
     pin(A) {
       direction: input;
     }
@@ -39,7 +39,7 @@ library(quan) {
   }
 
   cell(XOR) {
-    area: 18
+    area: 11
     pin(A) {
       direction: input;
     }
@@ -53,7 +53,7 @@ library(quan) {
   }
 
   cell(DFF) {
-    area: 12
+    area: 40
     ff(IQ, IQN) {
       clocked_on: C;
       next_state: D;

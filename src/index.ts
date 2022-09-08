@@ -19,6 +19,7 @@ async function run() {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         outputChannelCount: [blif.outputs.length],
+        channelCount: blif.outputs.length
     })
 
     var packet: number[] | null = null
@@ -58,21 +59,19 @@ async function run() {
 
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
-            const ibuf: number[][] = []
-            blif.inputs.forEach(input => ibuf.push([ inputs[input] ]))
-
-            const inb = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
-            inb.connect(isplit)
+            const ibuf = blif.inputs.map(input => [inputs[input]])
+            const bs = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
+            bs.connect(isplit)
             
             packet = null
-            
+
             recorder.port.postMessage(1)
-            inb.start()
+            bs.start()
             while(packet === null) {
                 await sleep(0)
             }
-            inb.stop()
-            inb.disconnect()
+            bs.stop()
+            bs.disconnect()
 
             blif.outputs.forEach((output, j) => outputs[output] = packet![j])
         }
@@ -84,6 +83,10 @@ async function run() {
         isplit.connect(n, i)
     })
     
+    blif.names.forEach((name, i) => {
+        // TODO
+    })
+
     blif.cells.forEach(cell => {
         switch(cell.name) {
             case 'AND': {
