@@ -91,7 +91,8 @@ async function run() {
 
     const inputs: Dictionary<number> = {}
     const outputs: Dictionary<number> = {}
-        
+
+
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
             const ibuf: number[][] = []
@@ -273,6 +274,8 @@ async function run() {
     const cycleLabel = document.createElement('p')
     document.body.appendChild(cycleLabel)
 
+    const start = performance.now()
+
     inputs['i_clk'] = 1
     inputs['i_rstn'] = 0
     await tick(2)
@@ -308,6 +311,9 @@ async function run() {
         }
         inputs['i_rdata'] = raddr < 0 ? 0 : unsign(mem[raddr])
     }
+
+    const end = performance.now()
+    console.log(`finished in ${(end-start)/1000} seconds`)
 }
 
 
