@@ -1,51 +1,7 @@
 import { WorkerUrl } from 'worker-url'
 import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
-import { BLIF, parseBLIF } from './blif'
+import { BLIF, parseBLIF, blifToDOT } from './blif'
 import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
-
-function blifToDOT(blif: BLIF): string {
-    const lines: string[] = []
-
-    lines.push('digraph blif {')
-    blif.inputs.forEach(input => lines.push(`"${input}" [shape="triangle"];`))
-    blif.outputs.forEach(output => lines.push(`"${output}" [shape="hexagon"];`))
-    blif.cells.forEach(cell => lines.push(`"${cell.uniqueName}" [label="${cell.uniqueName}"];`))
-    const outs: Dictionary<string[]> = {}
-    const ins: Dictionary<string> = {}
-    blif.cells.forEach(cell => {
-        for(const [k, v] of Object.entries(cell.connections)) {
-            if(k === 'A' || k === 'B' || k === 'C' || k === 'D') {
-                if(blif.inputs.includes(v)) {
-                    lines.push(`"${v}" -> "${cell.uniqueName}";`)
-                } else {
-                    if(v in outs) {
-                        outs[v].push(cell.uniqueName)
-                    } else {
-                        outs[v] = [cell.uniqueName]
-                    }
-                }
-            } else {
-                if(blif.outputs.includes(v)) {
-                    lines.push(`"${cell.uniqueName}" -> "${v}";`)
-                } else {
-                    ins[v] = cell.uniqueName
-                }
-            }
-        }
-    })
-    for(const [k, v] of Object.entries(outs)) {
-        for(const o of v) {
-            if(k in ins) {
-                lines.push(`"${ins[k]}" -> "${o}";`)
-            } else {
-                lines.push(`"${k}" -> "${o}";`)
-            }
-        }
-    }
-    lines.push('}')
-
-    return lines.join('\n')
-}
 
 async function run() {
     const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
@@ -62,7 +18,7 @@ async function run() {
     const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
-        channelCount: blif.outputs.length,
+        outputChannelCount: [blif.outputs.length],
     })
 
     var packet: number[] | null = null
@@ -89,11 +45,8 @@ async function run() {
         if(name in nodes) {
             const n = nodes[name]
             if(!(n instanceof GainNode)) throw new Error()
-            if(name in toConnect) {
-                delete toConnect[name]
-            } else {
-                throw new Error()
-            }
+            if(!(name in toConnect)) throw new Error()
+            delete toConnect[name]
             node.connect(n)
         } else {
             nodes[name] = node
@@ -131,7 +84,7 @@ async function run() {
         isplit.connect(n, i)
     })
     
-    blif.cells.forEach((cell, i) => {
+    blif.cells.forEach(cell => {
         switch(cell.name) {
             case 'AND': {
                 const a = getNode(cell.connections['A'])
@@ -187,32 +140,32 @@ async function run() {
 
 
     inputs['clk'] = 0
-    inputs['reset'] = 0
+    inputs['rst'] = 0
     await tick()
     console.log(outputs)
 
 
     for(var i = 0; i < 2; i++) {
         // inputs['clk'] = 0
-        // inputs['reset'] = 0
+        // inputs['rst'] = 0
         // await tick()
         inputs['clk'] = 1
-        inputs['reset'] = 0
+        inputs['rst'] = 0
         await tick()
         inputs['clk'] = 0
-        inputs['reset'] = 0
+        inputs['rst'] = 0
         await tick()
         console.log(outputs)
     }
 
     // inputs['clk'] = 0
-    // inputs['reset'] = 1
+    // inputs['rst'] = 1
     // await tick()
     inputs['clk'] = 1
-    inputs['reset'] = 1
+    inputs['rst'] = 1
     await tick()
     inputs['clk'] = 0
-    inputs['reset'] = 1
+    inputs['rst'] = 1
     await tick()
     console.log(outputs)
 }
