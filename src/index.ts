@@ -1,13 +1,13 @@
 import { WorkerUrl } from 'worker-url'
 import { Dictionary, min, max, sleep, frameToBit, framesToBits, bitsToNumber, numberToBits, makeAudioContext } from './util'
 import { BLIF, parseBLIF, blifToDOT } from './blif'
-import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
+import { makeBufferGate, makeNotGate, makeNandGate, makeAndGate, makeOrGate, makeNorGate, makeXorGate, makeMSDLatch, makeSampleBuffer, makeBufferSource } from './audio-logic'
 
 async function run() {
     const src = await (await fetch('http://127.0.0.1:8081/blif/counter.blif')).text()
     const blif = parseBLIF(src)
     console.log(blif)
-    //console.log(blifToDOT(blif))
+    console.log(blifToDOT(blif))
 
     
     const ctx = makeAudioContext()
@@ -89,10 +89,9 @@ async function run() {
 
     blif.cells.forEach(cell => {
         switch(cell.name) {
-            case 'AND': {
+            case 'BUF': {
                 const a = getNode(cell.connections['A'])
-                const b = getNode(cell.connections['B'])
-                const y = makeAndGate(ctx, a, b)
+                const y = makeBufferGate(ctx, a)
                 setNode(cell.connections['Y'], y)
                 break
             }
@@ -102,10 +101,31 @@ async function run() {
                 setNode(cell.connections['Y'], y)
                 break
             }
+            case 'AND': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeAndGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
             case 'NAND': {
                 const a = getNode(cell.connections['A'])
                 const b = getNode(cell.connections['B'])
                 const y = makeNandGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'OR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeOrGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NOR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeNorGate(ctx, a, b)
                 setNode(cell.connections['Y'], y)
                 break
             }
@@ -121,12 +141,6 @@ async function run() {
                 const d = getNode(cell.connections['D'])
                 const q = makeMSDLatch(ctx, c, d)
                 setNode(cell.connections['Q'], q)
-                break
-            }
-            case 'BUF': {
-                const a = getNode(cell.connections['A'])
-                const y = makeBufferGate(ctx, a)
-                setNode(cell.connections['Y'], y)
                 break
             }
             default: {

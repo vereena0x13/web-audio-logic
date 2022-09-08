@@ -1,18 +1,15 @@
 library(quan) {
-  cell(AND) {
-    area: 5
+  cell(BUF) {
+    area: 1
     pin(A) {
       direction: input;
     }
     pin(Y) {
-      function: "(A*B)";
+      function: "A";
       direction: output;
     }
-    pin(B) {
-      direction: input;
-    }
   }
-
+  
   cell(NOT) {
     area: 1
     pin(A) {
@@ -23,18 +20,60 @@ library(quan) {
       direction: output;
     }
   }
+  
+  cell(AND) {
+    area: 5
+    pin(A) {
+      direction: input;
+    }
+    pin(B) {
+      direction: input;
+    }
+    pin(Y) {
+      function: "(A*B)";
+      direction: output;
+    }
+  }
 
   cell(NAND) {
     area: 4
     pin(A) {
       direction: input;
     }
+    pin(B) {
+      direction: input;
+    }
     pin(Y) {
       function: "(A*B)'";
       direction: output;
     }
+  }
+
+  cell(OR) {
+    area: 2
+    pin(A) {
+      direction: input;
+    }
     pin(B) {
       direction: input;
+    }
+    pin(Y) {
+      function: "(A+B)";
+      direction: output;
+    }
+  }
+
+  cell(NOR) {
+    area: 3
+    pin(A) {
+      direction: input;
+    }
+    pin(B) {
+      direction: input;
+    }
+    pin(Y) {
+      function: "((A+B)')";
+      direction: output;
     }
   }
 
@@ -70,16 +109,4 @@ library(quan) {
       direction: input;
     }
   }
-
-  cell(BUF) {
-    area: 1
-    pin(A) {
-      direction: input;
-    }
-    pin(Y) {
-      function: "A";
-      direction: output;
-    }
-  }
-
 }
