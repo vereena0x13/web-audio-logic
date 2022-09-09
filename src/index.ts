@@ -253,24 +253,29 @@ async function run() {
                 }
                 default: {
                     if(cell.name in blifByName) {
-                        const cid = buildBLIFGraph(blifByName[cell.name])
+                        const cellBlif = blifByName[cell.name]
+                        const cid = buildBLIFGraph(cellBlif)
+                        console.log(cid, cell, nodes, blif)
                         for(const [k, v] of Object.entries(cell.connections)) {
+                            var li = cellBlif.inputs.includes(k)
+                            var ri = cellBlif.inputs.includes(v)
                             var left = cid + k
                             var right = id + v                            
-                            if(blif.inputs.includes(k)) {
-                                const t = left
-                                left = right
-                                right = t
+                            
+                            //console.log(li, ri, left, right)
+                            if(li && !ri) {
+                                getNode(right, true).connect(getNode(left, true))
+                            } else if(!li && ri) {
+                                assert(false)
+                            } else if(!li && !ri) {
+                                setNode(right, getNode(left, true))
+                            } else {
+                                getNode(right, true).connect(getNode(left, true))
                             }
-
-                            console.log(`${left}.connect(${right})`)
-                            getNode(left, true).connect(getNode(right, true))
-
+                            
                             if(left in toConnect) delete toConnect[left]
-                            else if(right in toConnect) delete toConnect[right]
-                            else assert(false, '?')
+                            if(right in toConnect) delete toConnect[right]
                         }
-                        console.log(cid, cell, nodes)
                     } else {
                         console.log(`WARNING: Unknown cell type: '${cell.name}'`)
                     }
@@ -293,7 +298,7 @@ async function run() {
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
-    for(var i = 0; i < 4; i++) {
+    for(var i = 0; i < 8; i++) {
         inputs['clk'] = 1
         await tick()
         inputs['clk'] = 0
