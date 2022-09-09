@@ -34,21 +34,13 @@ function computeBuses(xs: string[]): Bus[] {
     return buses
 }
 
-async function run() {
-    const src = await (await fetch('http://127.0.0.1:8081/blif/test2.blif')).text()
-    var srcs = src.split('.end').map(x => x + ".end\n")
-    srcs = srcs.slice(0, srcs.length-1)
-    
-    const blifs = srcs.map(x => parseBLIF(x))
-    const blifByName: Dictionary<BLIF> = {}
-    blifs.forEach(blif => {
-        assert(!(blif.model in blifByName), `duplicate module '${blif.model}'`)
-        blifByName[blif.model] = blif
-    })
 
-    console.log(blifs)
-    const top = blifs[0]
- 
+async function run() {
+    const src = await (await fetch('http://127.0.0.1:8081/blif/subleq.blif')).text()
+    const blif = parseBLIF(src)
+    console.log(blif)
+    //console.log(blifToDOT(blif))
+
     
     const ctx = makeAudioContext()
 
@@ -58,25 +50,24 @@ async function run() {
     const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
-        outputChannelCount: [top.outputs.length],
-        channelCount: top.outputs.length
+        outputChannelCount: [blif.outputs.length],
+        channelCount: blif.outputs.length
     })
 
     var packet: number[] | null = null
     recorder.port.onmessage = e => packet = framesToBits(e.data[0])
 
 
-    const isplit = ctx.createChannelSplitter(top.inputs.length)
-    const omerge = ctx.createChannelMerger(top.outputs.length)
+    const isplit = ctx.createChannelSplitter(blif.inputs.length)
+    const omerge = ctx.createChannelMerger(blif.outputs.length)
     omerge.connect(recorder)
 
 
     const nodes: Dictionary<AudioNode> = {}
     const toConnect: Dictionary<AudioNode> = {}
 
-    function getNode(name: string, forceExist: boolean = false): AudioNode {
+    function getNode(name: string): AudioNode {
         if(name in nodes) return nodes[name]
-        assert(!forceExist, `'${name}' does not exist`)
         const b = ctx.createGain()
         nodes[name] = b
         toConnect[name] = b
@@ -85,9 +76,9 @@ async function run() {
 
     function setNode(name: string, node: AudioNode) {
         if(name in nodes) {
-            assert(name in toConnect, `'${name}' not in toConnect`)
             const n = nodes[name]
-            assert(n instanceof GainNode, `attempt to connect (${node}) to a non-gain node '${name}' (${n}) via setNode`)
+            assert(n instanceof GainNode)
+            assert(name in toConnect)
             delete toConnect[name]
             node.connect(n)
         } else {
@@ -95,8 +86,8 @@ async function run() {
         }
     }
 
-    const inputBuses = computeBuses(top.inputs)
-    const outputBuses = computeBuses(top.outputs)
+    const inputBuses = computeBuses(blif.inputs)
+    const outputBuses = computeBuses(blif.outputs)
 
     const inputs: Dictionary<number> = {}
     const outputs: Dictionary<number> = {}
@@ -139,176 +130,129 @@ async function run() {
         }
     }
 
-    
-    var bgid = 0
-    function buildBLIFGraph(blif: BLIF): string {
-        const id = `${blif.model}${bgid++}`
-
-        /*
-        TODO
-
-        function makePLA(names: BLIFNames): AudioNode {
-            // TODO: handle special cases: zero cover; one cover that is just a 1 (i.e. a constant 0 or 1); also
-            //       handle the case when the PLA is just implementing a buffer gate
-            const is = names.inputs.map(input => getNode(input))
-            const rows = names.cover.map((covers, i) => {
-                const coverParts = covers.split(' ')
-                assert(coverParts.length === 2)
-                const cover = coverParts[0]
-                assert(coverParts[1] === '1')
-                assert(cover.length === is.length)
-                const rowInputs: AudioNode[] = []
-                for(var j = 0; j < cover.length; j++) {
-                    const c = cover.charAt(j)
-                    switch(c) {
-                        case '1': {
-                            rowInputs.push(getNode(names.inputs[i]))
-                            break
-                        }
-                        case '0': {
-                            rowInputs.push(makeNotGate(ctx, getNode(names.inputs[i])))
-                            break
-                        }
-                        case '-': {
-                            break
-                        }
-                        default: {
-                            throw new Error(`invalid cover character '${c}'`)
-                        }
-                    }
-                }
-                var row = makeAndGate(ctx, rowInputs[0], rowInputs[1])
-                for(var j = 0; j < rowInputs.length; j++) {
-                    row = makeAndGate(ctx, row, rowInputs[j])
-                }
-                return row
-            })
-            var out = makeOrGate(ctx, rows[0], rows[1])
-            for(var i = 2; i < rows.length; i++) {
-                out = makeOrGate(ctx, out, rows[i])
-            }
-            return out
-        }
-        
-        blif.names.forEach((name, i) => {
-            setNode(name.output, makePLA(name))
-        })
-        */
-    
-        blif.cells.forEach(cell => {
-            switch(cell.name) {
-                case 'BUF': {
-                    const a = getNode(id + cell.connections['A'])
-                    const y = makeBufferGate(ctx, a)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'NOT': {
-                    const a = getNode(id + cell.connections['A'])
-                    const y = makeNotGate(ctx, a)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'AND': {
-                    const a = getNode(id + cell.connections['A'])
-                    const b = getNode(id + cell.connections['B'])
-                    const y = makeAndGate(ctx, a, b)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'NAND': {
-                    const a = getNode(id + cell.connections['A'])
-                    const b = getNode(id + cell.connections['B'])
-                    const y = makeNandGate(ctx, a, b)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'OR': {
-                    const a = getNode(id + cell.connections['A'])
-                    const b = getNode(id + cell.connections['B'])
-                    const y = makeOrGate(ctx, a, b)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'NOR': {
-                    const a = getNode(id + cell.connections['A'])
-                    const b = getNode(id + cell.connections['B'])
-                    const y = makeNorGate(ctx, a, b)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'XOR': {
-                    const a = getNode(id + cell.connections['A'])
-                    const b = getNode(id + cell.connections['B'])
-                    const y = makeXorGate(ctx, a, b)
-                    setNode(id + cell.connections['Y'], y)
-                    break
-                }
-                case 'DFF': {
-                    const c = getNode(id + cell.connections['C'])
-                    const d = getNode(id + cell.connections['D'])
-                    const q = makeMSDLatch(ctx, c, d)
-                    setNode(id + cell.connections['Q'], q)
-                    break
-                }
-                default: {
-                    if(cell.name in blifByName) {
-                        const cellBlif = blifByName[cell.name]
-                        const cid = buildBLIFGraph(cellBlif)
-                        console.log(cid, cell, nodes, blif)
-                        for(const [k, v] of Object.entries(cell.connections)) {
-                            var li = cellBlif.inputs.includes(k)
-                            var ri = cellBlif.inputs.includes(v)
-                            var left = cid + k
-                            var right = id + v                            
-                            
-                            //console.log(li, ri, left, right)
-                            if(li && !ri) {
-                                getNode(right, true).connect(getNode(left, true))
-                            } else if(!li && ri) {
-                                assert(false)
-                            } else if(!li && !ri) {
-                                setNode(right, getNode(left, true))
-                            } else {
-                                getNode(right, true).connect(getNode(left, true))
-                            }
-                            
-                            if(left in toConnect) delete toConnect[left]
-                            if(right in toConnect) delete toConnect[right]
-                        }
-                    } else {
-                        console.log(`WARNING: Unknown cell type: '${cell.name}'`)
-                    }
-                    break
-                }
-            }
-        })
-
-        return id
-    }
-
-    top.inputs.forEach((input, i) => {
+    blif.inputs.forEach((input, i) => {
         const n = ctx.createGain()
-        nodes[`${top.model}0` + input] = n
+        nodes[input] = n
         isplit.connect(n, i)
     })
-    const tid = buildBLIFGraph(top)
-    top.outputs.forEach((output, i) => nodes[tid + output].connect(omerge, 0, i))
+
+    function makePLA(names: BLIFNames): AudioNode {
+        // TODO: handle special cases: zero cover; one cover that is just a 1 (i.e. a constant 0 or 1); also
+        //       handle the case when the PLA is just implementing a buffer gate
+        const is = names.inputs.map(input => getNode(input))
+        const rows = names.cover.map((covers, i) => {
+            const coverParts = covers.split(' ')
+            assert(coverParts.length === 2)
+            const cover = coverParts[0]
+            assert(coverParts[1] === '1')
+            assert(cover.length === is.length)
+            const rowInputs: AudioNode[] = []
+            for(var j = 0; j < cover.length; j++) {
+                const c = cover.charAt(j)
+                switch(c) {
+                    case '1': {
+                        rowInputs.push(getNode(names.inputs[i]))
+                        break
+                    }
+                    case '0': {
+                        rowInputs.push(makeNotGate(ctx, getNode(names.inputs[i])))
+                        break
+                    }
+                    case '-': {
+                        break
+                    }
+                    default: {
+                        throw new Error(`invalid cover character '${c}'`)
+                    }
+                }
+            }
+            var row = makeAndGate(ctx, rowInputs[0], rowInputs[1])
+            for(var j = 0; j < rowInputs.length; j++) {
+                row = makeAndGate(ctx, row, rowInputs[j])
+            }
+            return row
+        })
+        var out = makeOrGate(ctx, rows[0], rows[1])
+        for(var i = 2; i < rows.length; i++) {
+            out = makeOrGate(ctx, out, rows[i])
+        }
+        return out
+    }
+    
+    blif.names.forEach((name, i) => {
+        // TODO
+        // setNode(name.output, makePLA(name))
+    })
+
+    blif.cells.forEach(cell => {
+        switch(cell.name) {
+            case 'BUF': {
+                const a = getNode(cell.connections['A'])
+                const y = makeBufferGate(ctx, a)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NOT': {
+                const a = getNode(cell.connections['A'])
+                const y = makeNotGate(ctx, a)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'AND': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeAndGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NAND': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeNandGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'OR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeOrGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'NOR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeNorGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'XOR': {
+                const a = getNode(cell.connections['A'])
+                const b = getNode(cell.connections['B'])
+                const y = makeXorGate(ctx, a, b)
+                setNode(cell.connections['Y'], y)
+                break
+            }
+            case 'DFF': {
+                const c = getNode(cell.connections['C'])
+                const d = getNode(cell.connections['D'])
+                const q = makeMSDLatch(ctx, c, d)
+                setNode(cell.connections['Q'], q)
+                break
+            }
+            default: {
+                console.log(`WARNING: Unknown cell type: '${cell.name}'`)
+                break
+            }
+        }
+    })
+
+    blif.outputs.forEach((output, i) => nodes[output].connect(omerge, 0, i))
+
 
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
 
 
-    for(var i = 0; i < 8; i++) {
-        inputs['clk'] = 1
-        await tick()
-        inputs['clk'] = 0
-        await tick()
-        console.log(outputs)
-    }
-
-
-
-    /*
     inputs['i_rdata'] = 0
     inputs['i_rstn'] = 1
 
@@ -370,7 +314,6 @@ async function run() {
 
     const end = performance.now()
     console.log(`finished in ${(end-start)/1000} seconds`)
-    */
 }
 
 

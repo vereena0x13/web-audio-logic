@@ -5,6 +5,7 @@ module test2(
 
     wire ff0;
     wire ff1;
+    wire ff0x1;
 
     dff1 g0(
         .clk(clk),
@@ -13,9 +14,15 @@ module test2(
     );
 
     dff1 g1(
-        .clk(ff0),
-        .dat(~ff1),
+        .clk(clk),
+        .dat(ff0x1),
         .q(ff1)
+    );
+
+    xor2 g2(
+        .a(ff0),
+        .b(ff1),
+        .y(ff0x1)
     );
 
     assign y = {ff1, ff0};
