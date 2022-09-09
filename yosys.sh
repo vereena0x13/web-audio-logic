@@ -9,4 +9,3 @@ flatten; proc; opt; fsm; opt; memory; opt;
 techmap; opt; dfflibmap -liberty ${LIBRARY};
 abc -liberty ${LIBRARY};
 clean; write_blif -impltf -buf BUF A Y ${OUTFILE}"
-

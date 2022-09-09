@@ -91,6 +91,8 @@ async function run() {
 
     const inputs: Dictionary<number> = {}
     const outputs: Dictionary<number> = {}
+    inputBuses.forEach(x => inputs[x.name] = 0)
+    outputBuses.forEach(x => outputs[x.name] = 0)
 
 
     async function tick(ticks: number = 1) {
@@ -251,6 +253,12 @@ async function run() {
 
 
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
+
+
+    console.log(Object.keys(inputs), Object.keys(outputs))
+
+
+
 
 
     inputs['i_rdata'] = 0
