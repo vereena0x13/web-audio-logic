@@ -54,9 +54,10 @@ async function run() {
         channelCount: blif.outputs.length
     })
 
-    var packet: number[] | null = null
-    recorder.port.onmessage = e => packet = framesToBits(e.data[0])
-
+    //var packet: number[] | null = null
+    //recorder.port.onmessage = e => packet = framesToBits(e.data[0])
+    var resolvePacket: (pkt: number[]) => void
+    recorder.port.onmessage = e => resolvePacket(framesToBits(e.data[0]))
 
     const isplit = ctx.createChannelSplitter(blif.inputs.length)
     const omerge = ctx.createChannelMerger(blif.outputs.length)
@@ -109,17 +110,17 @@ async function run() {
 
             const bs = makeBufferSource(ctx, makeSampleBuffer(ctx, ibuf))
             bs.connect(isplit)
-            
-            packet = null
-            recorder.port.postMessage(1)
-            bs.start()
-            while(packet === null) {
-                await sleep(0)
-            }
-            bs.stop()
-            bs.disconnect()
 
-            const pkt: number[] = packet! // NOTE: typescript bug; shouldn't have to declare pkt
+            const pkt = await new Promise<number[]>(resolve => {
+                resolvePacket = packet => {
+                    bs.stop()
+                    bs.disconnect()
+                    resolve(packet)
+                }
+                recorder.port.postMessage(1)
+                bs.start()
+            });
+
             var j = 0
             for(const bus of outputBuses) {
                 if(bus.size === 1) {
@@ -286,7 +287,7 @@ async function run() {
 
     inputs['i_clk'] = 1
     inputs['i_rstn'] = 0
-    await tick(2)
+    await tick()
     inputs['i_clk'] = 0
     await tick()
     inputs['i_rstn'] = 1
