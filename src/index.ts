@@ -45,23 +45,32 @@ async function run() {
     const ctx = makeAudioContext()
 
 
-    await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./recorder-worklet.ts', import.meta.url), { name: 'recorder-processor' }))
+    await ctx.audioWorklet.addModule(new WorkerUrl(new URL('./runner-worklet.ts', import.meta.url), { name: 'runner-processor' }))
 
-    const recorder = new AudioWorkletNode(ctx, 'recorder-processor', {
-        numberOfInputs: 1,
+    const runner = new AudioWorkletNode(ctx, 'runner-processor', {
+        numberOfInputs: 2,
         numberOfOutputs: 1,
         outputChannelCount: [blif.outputs.length],
         channelCount: blif.outputs.length
     })
 
-    //var packet: number[] | null = null
-    //recorder.port.onmessage = e => packet = framesToBits(e.data[0])
-    var resolvePacket: (pkt: number[]) => void
-    recorder.port.onmessage = e => resolvePacket(framesToBits(e.data[0]))
+    runner.port.postMessage(blif)
 
+
+    const clk = ctx.createConstantSource()
+    clk.connect(runner, 0, 1)
+
+    
     const isplit = ctx.createChannelSplitter(blif.inputs.length)
+    runner.connect(isplit)
     const omerge = ctx.createChannelMerger(blif.outputs.length)
-    omerge.connect(recorder)
+    omerge.connect(runner)
+
+
+    const g = ctx.createGain()
+    g.gain.value = 0
+    runner.connect(g)
+    g.connect(ctx.destination)
 
 
     const nodes: Dictionary<AudioNode> = {}
@@ -86,16 +95,17 @@ async function run() {
             nodes[name] = node
         }
     }
+    
 
-    const inputBuses = computeBuses(blif.inputs)
-    const outputBuses = computeBuses(blif.outputs)
+    //const inputBuses = computeBuses(blif.inputs)
+    //const outputBuses = computeBuses(blif.outputs)
 
-    const inputs: Dictionary<number> = {}
-    const outputs: Dictionary<number> = {}
-    inputBuses.forEach(x => inputs[x.name] = 0)
-    outputBuses.forEach(x => outputs[x.name] = 0)
+    //const inputs: Dictionary<number> = {}
+    //const outputs: Dictionary<number> = {}
+    //inputBuses.forEach(x => inputs[x.name] = 0)
+    //outputBuses.forEach(x => outputs[x.name] = 0)
 
-
+    /*
     async function tick(ticks: number = 1) {
         for(var i = 0; i < ticks; i++) {
             const ibuf: number[][] = []
@@ -117,7 +127,7 @@ async function run() {
                     bs.disconnect()
                     resolve(packet)
                 }
-                recorder.port.postMessage(1)
+                runner.port.postMessage(1)
                 bs.start()
             });
 
@@ -132,13 +142,17 @@ async function run() {
             }
         }
     }
+    */
 
+    
     blif.inputs.forEach((input, i) => {
         const n = ctx.createGain()
         nodes[input] = n
         isplit.connect(n, i)
     })
+    
 
+    /*
     function makePLA(names: BLIFNames): AudioNode {
         // TODO: handle special cases: zero cover; one cover that is just a 1 (i.e. a constant 0 or 1); also
         //       handle the case when the PLA is just implementing a buffer gate
@@ -186,7 +200,9 @@ async function run() {
         // TODO
         // setNode(name.output, makePLA(name))
     })
+    */
 
+    
     blif.cells.forEach(cell => {
         switch(cell.name) {
             case 'BUF': {
@@ -254,14 +270,27 @@ async function run() {
 
 
     for(const [k, v] of Object.entries(toConnect)) console.log(`Unconnected ${k} ${v}`)
+    
 
 
-    console.log(Object.keys(inputs), Object.keys(outputs))
+    //console.log(Object.keys(inputs), Object.keys(outputs))
+
+
+    const start = performance.now()
+    runner.port.onmessage = e => {
+        if(e.data == 'done') {
+            clk.stop()
+            const end = performance.now()
+            console.log(`finished in ${(end-start)/1000} seconds`)
+        }
+    }
+
+    clk.start()
 
 
 
 
-
+    /*
     inputs['i_rdata'] = 0
     inputs['i_rstn'] = 1
 
@@ -323,6 +352,7 @@ async function run() {
 
     const end = performance.now()
     console.log(`finished in ${(end-start)/1000} seconds`)
+    */
 }
 
 
