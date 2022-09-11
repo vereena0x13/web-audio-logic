@@ -81,98 +81,98 @@ module subleq (
   always @(r_state) begin
     case (r_state)
       S_00_PC_TO_MEM_ADDR : begin
-        r_state_next <= S_01_MEM_DATA_TO_MAR;
+        r_state_next = S_01_MEM_DATA_TO_MAR;
       end
       S_01_MEM_DATA_TO_MAR : begin
-        r_state_next <= S_02_MAR_TO_MEM_ADDR;
+        r_state_next = S_02_MAR_TO_MEM_ADDR;
       end
       S_02_MAR_TO_MEM_ADDR : begin
-        r_state_next <= S_03_MEM_DATA_TO_A;
+        r_state_next = S_03_MEM_DATA_TO_A;
       end
       S_03_MEM_DATA_TO_A : begin
-        r_state_next <= S_04_PC_TO_MEM_ADDR;
+        r_state_next = S_04_PC_TO_MEM_ADDR;
       end
       S_04_PC_TO_MEM_ADDR : begin
-        r_state_next <= S_05_MEM_DATA_TO_MAR;
+        r_state_next = S_05_MEM_DATA_TO_MAR;
       end
       S_05_MEM_DATA_TO_MAR : begin
-        r_state_next <= S_06_MAR_TO_MEM_ADDR;
+        r_state_next = S_06_MAR_TO_MEM_ADDR;
       end
       S_06_MAR_TO_MEM_ADDR : begin
-        r_state_next <= S_07_MEM_DATA_TO_B;
+        r_state_next = S_07_MEM_DATA_TO_B;
       end
       S_07_MEM_DATA_TO_B : begin
-        r_state_next <= S_08_B_MINUS_A_TO_MEM_DATA;
+        r_state_next = S_08_B_MINUS_A_TO_MEM_DATA;
       end
       S_08_B_MINUS_A_TO_MEM_DATA : begin
-        r_state_next <= S_09_PC_TO_MEM_ADDR;
+        r_state_next = S_09_PC_TO_MEM_ADDR;
       end
       S_09_PC_TO_MEM_ADDR : begin
-        r_state_next <= S_10_MEM_DATA_TO_MAR;
+        r_state_next = S_10_MEM_DATA_TO_MAR;
       end
       S_10_MEM_DATA_TO_MAR : begin
-        r_state_next <= S_11_BRANCH_TO_MAR_OR_INC_PC;
+        r_state_next = S_11_BRANCH_TO_MAR_OR_INC_PC;
       end
       S_11_BRANCH_TO_MAR_OR_INC_PC : begin
-        r_state_next <= S_00_PC_TO_MEM_ADDR;
+        r_state_next = S_00_PC_TO_MEM_ADDR;
       end
       default : begin
-        r_state_next <= S_00_PC_TO_MEM_ADDR;
+        r_state_next = S_00_PC_TO_MEM_ADDR;
       end
     endcase
   end
    
   always @(r_state) begin
   // assign default value to all control signals
-      w_a_ld           <= 0;
-      w_b_ld           <= 0;
-      w_mar_ld         <= 0;
-      w_pc_ld          <= 0;
-      w_pc_inc         <= 0;
-      w_mux_sel_pc_mar <= 0;
-      w_mem_we         <= 0;
+      w_a_ld           = 0;
+      w_b_ld           = 0;
+      w_mar_ld         = 0;
+      w_pc_ld          = 0;
+      w_pc_inc         = 0;
+      w_mux_sel_pc_mar = 0;
+      w_mem_we         = 0;
     case (r_state)
         S_00_PC_TO_MEM_ADDR : begin
           
         end
         S_01_MEM_DATA_TO_MAR : begin
-          w_mar_ld <= 1;
+          w_mar_ld = 1;
         end
         S_02_MAR_TO_MEM_ADDR : begin
-          w_mux_sel_pc_mar <= 1;
+          w_mux_sel_pc_mar = 1;
         end
         S_03_MEM_DATA_TO_A : begin
-          w_mux_sel_pc_mar <= 1;
-          w_pc_inc <= 1;
-          w_a_ld <= 1;
+          w_mux_sel_pc_mar = 1;
+          w_pc_inc = 1;
+          w_a_ld = 1;
         end
         S_04_PC_TO_MEM_ADDR : begin
           
         end
         S_05_MEM_DATA_TO_MAR : begin
-          w_mar_ld <= 1;
+          w_mar_ld = 1;
         end
         S_06_MAR_TO_MEM_ADDR : begin
-          w_mux_sel_pc_mar <= 1;
+          w_mux_sel_pc_mar = 1;
         end
         S_07_MEM_DATA_TO_B : begin
-          w_mux_sel_pc_mar <= 1;
-          w_pc_inc <= 1;
-          w_b_ld <= 1;
+          w_mux_sel_pc_mar = 1;
+          w_pc_inc = 1;
+          w_b_ld = 1;
         end
         S_08_B_MINUS_A_TO_MEM_DATA : begin
-          w_mux_sel_pc_mar <= 1;
-          w_mem_we         <= 1;
+          w_mux_sel_pc_mar = 1;
+          w_mem_we         = 1;
         end
         S_09_PC_TO_MEM_ADDR : begin
           
         end
         S_10_MEM_DATA_TO_MAR : begin
-          w_mar_ld <= 1;
+          w_mar_ld = 1;
         end
         S_11_BRANCH_TO_MAR_OR_INC_PC : begin
-          w_pc_inc         <= 1;
-          w_pc_ld          <= w_less_or_equal_to_zero;          
+          w_pc_inc         = 1;
+          w_pc_ld          = w_less_or_equal_to_zero;          
         end
     endcase
   end
