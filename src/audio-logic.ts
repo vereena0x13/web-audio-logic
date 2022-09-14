@@ -1,4 +1,4 @@
-import { assert } from "./util"
+import { assert, Dictionary } from "./util"
 
 export function makeBufferGate(ctx: BaseAudioContext, input?: AudioNode): AudioNode {
     const node = ctx.createGain()
@@ -107,4 +107,8 @@ export function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioN
     const o0 = makeAndGate(ctx, a, nsel)
     const o1 = makeAndGate(ctx, b, sel)
     return makeOrGate(ctx, o0, o1)
+}
+
+export abstract class AudioLogicProcessor {
+    abstract update(outputs: Dictionary<number>, inputs: Dictionary<number>): boolean;
 }
