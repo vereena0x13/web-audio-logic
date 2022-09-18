@@ -14,7 +14,7 @@ export class SubleqProcessor extends AudioLogicProcessor {
         code.forEach((v, i) => this.memory[i] = v)
     }
 
-    update(outputs: Dictionary<number>, inputs: Dictionary<number>): boolean {
+    update(model: any): boolean {
         if(!this.clk && this.rst === 0) {
             function unsign(n: number): number {
                 return n & 0xFF
@@ -25,11 +25,11 @@ export class SubleqProcessor extends AudioLogicProcessor {
                 return r > 0x7F ? r - 0x100 : r
             }
 
-            const waddr = sign(outputs['o_waddr'])
-            const wdata = sign(outputs['o_wdata'])
-            const raddr = sign(outputs['o_raddr'])
+            const waddr = sign(model.o_waddr)
+            const wdata = sign(model.o_wdata)
+            const raddr = sign(model.o_raddr)
 
-            if(outputs['o_we'] === 1) {
+            if(model.o_we === 1) {
                 console.log(`write ${wdata} to ${waddr}`)
                 if(waddr < 0) {
                     if(waddr == -7) {
@@ -44,12 +44,12 @@ export class SubleqProcessor extends AudioLogicProcessor {
                     this.memory[waddr] = wdata
                 }
             }
-            inputs['i_rdata'] = raddr < 0 ? 0 : unsign(this.memory[raddr])
+            model.i_rdata = raddr < 0 ? 0 : unsign(this.memory[raddr])
         }
 
 
-        inputs['i_rstn'] = this.rst > 0 ? 0 : 1
-        inputs['i_clk'] = this.clk ? 1 : 0
+        model.i_rstn = this.rst > 0 ? 0 : 1
+        model.i_clk = this.clk ? 1 : 0
 
         this.clk = !this.clk
 

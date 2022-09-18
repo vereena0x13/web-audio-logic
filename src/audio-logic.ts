@@ -110,5 +110,5 @@ export function makeDemultiplexor(ctx: BaseAudioContext, a: AudioNode, b: AudioN
 }
 
 export abstract class AudioLogicProcessor {
-    abstract update(outputs: Dictionary<number>, inputs: Dictionary<number>): boolean;
+    abstract update(model: any): boolean;
 }

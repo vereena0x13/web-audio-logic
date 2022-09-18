@@ -38,18 +38,42 @@ class RunnerProcessor extends AudioWorkletProcessor {
     private inputBuses: Bus[] | undefined
     private outputBuses: Bus[] | undefined
 
+    private outputs: Dictionary<number> = {}
     private inputs: Dictionary<number> = {}
 
     private processor: AudioLogicProcessor = new SubleqProcessor() // TODO: un-hardcode this!
+
+    private modelProxy: object | undefined
 
     constructor() {
         super()
         this.port.onmessage = e => {
             if(this.blif === undefined) {
                 this.blif = e.data
+                
                 this.inputBuses = computeBuses(this.blif!.inputs)
-                this.outputBuses = computeBuses(this.blif!.outputs)
                 this.inputBuses!.forEach(bus => this.inputs[bus.name] = 0)
+
+                this.outputBuses = computeBuses(this.blif!.outputs)
+
+                const _outputs = this.outputs
+                const _inputs = this.inputs
+
+                this.modelProxy = new Proxy({}, {
+                    get(target: object, name: string, receiver: any) {
+                        if(name in _outputs) {
+                            return _outputs[name]
+                        }
+                        return undefined
+                    },
+                    set(target: object, name: string, value: any, receiver: any) {
+                        if(name in _inputs) {
+                            _inputs[name] = value
+                            return true
+                        }
+                        return false
+                    },
+                })
             }
         }
     }
@@ -68,19 +92,18 @@ class RunnerProcessor extends AudioWorkletProcessor {
 
 
         const pkt = framesToBits(workletInputs[0])
-        const outputs: Dictionary<number> = {}
         var j = 0
         for(const bus of this.outputBuses!) {
             if(bus.size === 1) {
-                outputs[bus.name] = pkt[j]
+                this.outputs[bus.name] = pkt[j]
             } else {
-                outputs[bus.name] = bitsToNumber(pkt.slice(j, j + bus.size))
+                this.outputs[bus.name] = bitsToNumber(pkt.slice(j, j + bus.size))
             }
             j += bus.size
         }
 
 
-        const keepRunning = this.processor.update(outputs, this.inputs)
+        const keepRunning = this.processor.update(this.modelProxy)
         if(!keepRunning) {
             this.port.postMessage('done') // TODO
             return false
